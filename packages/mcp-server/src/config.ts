@@ -31,6 +31,12 @@ const Env = z.object({
   /** local dev only: allow http:// webhooks and probe targets */
   ALLOW_INSECURE_URLS: z.enum(['0', '1']).default('0'),
   NODE_ENV: z.string().default('development'),
+  /** VerdictOracle deployment; empty = onchain features off */
+  ORACLE_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional().or(z.literal('').transform(() => undefined)),
+  ORACLE_RPC_URL: z.string().optional(),
+  ORACLE_CHAIN_ID: z.coerce.number().int().positive().default(4663),
+  /** hot key allowed only to call attest(); never the owner key. Empty = read-only */
+  ATTESTER_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/).optional().or(z.literal('').transform(() => undefined)),
 });
 
 export type Config = z.infer<typeof Env>;

@@ -109,7 +109,7 @@ describe('tools', () => {
       expect(env._meta.costUnits).toBeGreaterThanOrEqual(0);
       for (const a of env.nextActions) expect(Object.keys(TOOLS)).toContain(a.tool);
     }
-    expect([...seen].sort()).toEqual(TOOL_DEFS.map((t) => t.name).sort());
+    expect([...seen].sort()).toEqual(TOOL_DEFS.map((t) => t.name).sort()); // verdict_attest_token is covered in oracle.test.ts
   });
 
   it('compare charges per address and ranks by score', async () => {

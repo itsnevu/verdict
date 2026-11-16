@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  SIGNALS, TOOLS, VerdictError, checkActions, errors, meta, normAddress, scanNextActions, trustScore,
+  SIGNALS, TOOLS, VerdictError, inputsHash, toOracleVerdict, checkActions, errors, meta, normAddress, scanNextActions, trustScore,
   type Envelope, type ErrorEnvelope, type Label, type NextAction, type ToolName,
 } from '@verdictagent/core';
 import { sha, type VerdictService } from '../service.js';
@@ -47,7 +47,10 @@ export const TOOL_DEFS = [
     cost: () => TOOLS.verdict_scan_token.cost,
     async run(a, _c, svc) {
       const r = await svc.scan(normAddress(a.address));
-      return { data: { ...r.verdict, cached: r.cached }, brief: r.brief, nextActions: scanNextActions(r.verdict), ...scanEnvelope(r) };
+      const onchain = await readOnchain(svc, r.verdict.address, r.inputs);
+      const next = scanNextActions(r.verdict);
+      if (onchain && !onchain.matchesCurrent && svc.oracle?.writable) next.push({ tool: 'verdict_attest_token', reason: 'record this verdict onchain so other agents and contracts can verify it', args: { address: r.verdict.address, idempotencyKey: `attest-${r.verdict.address}-${Date.parse(r.inputs.now)}` } });
+      return { data: { ...r.verdict, cached: r.cached, ...(onchain ? { onchain } : {}) }, brief: r.brief, nextActions: next, ...scanEnvelope(r) };
     },
   }),
   def({
@@ -249,11 +252,64 @@ export const TOOL_DEFS = [
   }),
 ] as const;
 
-export const TOOL_MAP = new Map<string, (typeof TOOL_DEFS)[number]>(TOOL_DEFS.map((t) => [t.name, t]));
+export const ATTEST_DEF = def({
+  name: 'verdict_attest_token',
+  description:
+    'Write the current verdict for a token to the VerdictOracle contract on Robinhood Chain, so other agents and smart contracts can read and verify it ' +
+    '(score, label, confidence, flags and a keccak256 commitment to the exact inputs). Use after verdict_scan_token when the verdict must be provable onchain. ' +
+    'Do NOT call it to monitor; it costs gas. If the same inputs are already onchain it returns the existing record without a new transaction. ' +
+    'Requires scope "attest" and an idempotencyKey. Cost: 2 units.',
+  input: z.object({ address: addr, idempotencyKey: idem }),
+  cost: () => TOOLS.verdict_attest_token.cost,
+  scope: 'attest',
+  async run(a, c, svc) {
+    const o = svc.oracle;
+    if (!o || !o.writable) throw new VerdictError('ORACLE_NOT_CONFIGURED', 'this server has no VerdictOracle attester configured', false, 'set ORACLE_ADDRESS and ATTESTER_PRIVATE_KEY on the server, or read verdicts with verdict_scan_token', 503);
+    const address = normAddress(a.address);
+    const idemKey = `attest:${keyHash(c.apiKey!)}:${a.idempotencyKey}`;
+    const prior = await svc.cache.get<Record<string, unknown>>(idemKey);
+    if (prior) return { data: { ...prior, replayed: true }, brief: `Putusan ${address} sudah dicatat onchain (permintaan ulang).`, nextActions: [], _meta: { confidence: null } };
+    const r = await svc.scan(address);
+    const block = await o.blockNumber();
+    const payload = toOracleVerdict(r.verdict, r.inputs, block);
+    if (!payload) throw errors.insufficient(address);
+    const current = await o.read(address as `0x${string}`);
+    let out: Record<string, unknown>;
+    if (current.attested && current.inputsHash === payload.inputsHash) {
+      out = { address, oracle: o.address, chainId: o.chainId, txHash: null, alreadyOnchain: true, inputsHash: payload.inputsHash, onchain: current };
+    } else {
+      const tx = await o.attest(address as `0x${string}`, payload);
+      out = { address, oracle: o.address, chainId: o.chainId, txHash: tx.txHash, txUrl: o.txUrl(tx.txHash), blockNumber: tx.blockNumber.toString(), alreadyOnchain: false, inputsHash: payload.inputsHash, onchain: await o.read(address as `0x${string}`) };
+    }
+    await svc.cache.set(idemKey, out, 86_400);
+    return {
+      data: { ...out, replayed: false },
+      brief: out.alreadyOnchain ? `Putusan ${(r.verdict.symbol ?? address).toUpperCase()} dengan input yang sama sudah ada onchain; tidak ada transaksi baru.` : `Putusan ${(r.verdict.symbol ?? address).toUpperCase()} skor ${r.verdict.score} (${r.verdict.label}) dicatat di Robinhood Chain, tx ${String(out.txHash).slice(0, 10)}….`,
+      nextActions: checkActions([{ tool: 'verdict_scan_token', reason: 'read it back with the onchain field', args: { address } }]),
+      ...scanEnvelope(r),
+    };
+  },
+});
+
+/** Onchain record for a token plus whether it commits to the inputs just scored. Never throws. */
+async function readOnchain(svc: VerdictService, address: string, inputs: Parameters<typeof inputsHash>[0]) {
+  if (!svc.oracle) return null;
+  try {
+    const v = await svc.oracle.read(address as `0x${string}`);
+    return { oracle: svc.oracle.address, chainId: svc.oracle.chainId, ...v, matchesCurrent: v.attested && v.inputsHash === inputsHash(inputs) };
+  } catch (e) {
+    svc.log.warn('oracle_read_failed', { addr: address, err: (e as Error).message.split('\n')[0] });
+    return { oracle: svc.oracle.address, chainId: svc.oracle.chainId, attested: false, error: 'oracle read failed', matchesCurrent: false };
+  }
+}
+
+type AnyTool = (typeof TOOL_DEFS)[number] | typeof ATTEST_DEF;
+export const ALL_TOOLS: readonly AnyTool[] = [...TOOL_DEFS, ATTEST_DEF];
+export const TOOL_MAP = new Map<string, AnyTool>(ALL_TOOLS.map((t) => [t.name, t]));
 
 /** JSON Schema for tools/list (zod v4 built-in). */
 export function toolList() {
-  return TOOL_DEFS.map((t) => {
+  return ALL_TOOLS.map((t) => {
     const schema = z.toJSONSchema(t.input, { io: 'input' }) as Record<string, unknown>;
     delete schema.$schema;
     return {

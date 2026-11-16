@@ -87,6 +87,10 @@ Diperbaiki dan diverifikasi di compose produksi: SSRF pada webhook dan probe MCP
 
 Belum dikerjakan (performa, relevan saat data besar): `latestScores` memindai seluruh tabel `scores`; leaderboard menjalankan satu query per scan; `scores` dan `agent_calls` tidak dipangkas; worker tidak punya lock bila dijalankan lebih dari satu replika.
 
+## Robinhood Chain dan VerdictOracle (2026-11-16)
+
+Produk sekarang menargetkan Robinhood Chain mainnet (4663). Kontrak `contracts/src/VerdictOracle.sol`: 22 test Foundry (4 fuzz × 1024 run), coverage 100% baris / 100% fungsi / 76% cabang, attest ≈ 68k gas. Diverifikasi end-to-end di chain lokal; **belum dideploy ke mainnet**: butuh review/audit, multisig owner, dan wallet deployer berisi ETH milik user (runbook di `contracts/README.md`).
+
 ## 5 langkah lanjutan paling bernilai
 
 1. **Test integrasi Postgres otomatis** (service Postgres di CI): `PgStore` sudah terbukti jalan di compose, tapi belum diuji otomatis seperti `MemoryStore`.

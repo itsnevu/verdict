@@ -11,8 +11,8 @@ const server = join(root, 'packages/mcp-server/dist/server.js');
 const stdioBin = join(root, 'packages/mcp-server/bin/verdict-mcp');
 const PORT = 18080 + Math.floor(Math.random() * 500);
 const BASE = `http://127.0.0.1:${PORT}`;
-// DEGEN on Base: a long-lived, liquid token so the live check is stable
-const REAL = (process.env.SMOKE_REAL_TOKEN ?? '0x4ed4e862860bed51a9570b96d89af5e1b0efefed').toLowerCase();
+// CRCL on Robinhood Chain: a liquid token so the live check is stable
+const REAL = (process.env.SMOKE_REAL_TOKEN ?? '0xdf0992e440dd0be65bd8439b609d6d4366bf1cb5').toLowerCase();
 const FIX = '0x000000000000000000000000000000000000a002';
 
 let failures = 0;
@@ -46,7 +46,7 @@ try {
   const init = await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'smoke', version: '1' } } });
   ok(init.result?.serverInfo?.name === 'verdictagent', 'MCP initialize');
   const list = await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
-  ok(list.result?.tools?.length === 11, `MCP tools/list → ${list.result?.tools?.length} tools`);
+  ok(list.result?.tools?.length === 12, `MCP tools/list → ${list.result?.tools?.length} tools`);
   const call = await rpc({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'verdict_scan_token', arguments: { address: FIX } } }, { 'x-agent-id': 'smoke-agent' });
   ok(envelopeOk(call.result?.structuredContent), 'MCP tools/call returns a valid envelope');
   ok(call.result?.structuredContent?.data?.flags?.includes('PUMP_EXHAUSTED'), 'fixture ZOLVA → PUMP_EXHAUSTED');

@@ -11,6 +11,7 @@ export const TOOLS = {
   verdict_registry_check: { cost: 1, write: false },
   verdict_watch_token: { cost: 1, write: true, scope: 'watch' },
   verdict_register_mcp: { cost: 1, write: true, scope: 'registry' },
+  verdict_attest_token: { cost: 2, write: true, scope: 'attest' },
 } as const;
 
 export type ToolName = keyof typeof TOOLS;

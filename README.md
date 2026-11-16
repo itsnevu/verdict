@@ -70,6 +70,7 @@ Identify your agent with the `X-Agent-Id` header or `params._meta.agent_id` on `
 | `verdict_register_mcp {url, declaredTools[], contractTargets[], idempotencyKey}` | 1 | scope `registry`; probe + trust score |
 | `verdict_registry_search {query?, minTrust?, limit?}` | 0.2 | find third-party MCP servers by trust |
 | `verdict_registry_check {idOrUrl}` | 1 | re-probe one endpoint |
+| `verdict_attest_token {address, idempotencyKey}` | 2 | scope `attest`; write the verdict to VerdictOracle on Robinhood Chain |
 
 ## Use it over HTTP
 
@@ -84,6 +85,7 @@ Identify your agent with the `X-Agent-Id` header or `params._meta.agent_id` on `
 | `GET /v1/budget` | budget | 60/min |
 | `POST /v1/watch` | watch_token | scope `watch` |
 | `POST /v1/registry` · `GET /v1/registry` · `GET /v1/registry/check?id=` | registry | scope `registry` for POST |
+| `POST /v1/attest` | attest_token | scope `attest`, costs gas |
 | `GET /v1/agents` | leaderboard | active after 200 real calls |
 | `GET /v1/health` | | |
 
@@ -99,6 +101,16 @@ Every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimi
 ```
 
 Errors keep the same shape with `error: {code, message, retryable, fix}`, e.g. `SCOPE_REQUIRED`, `INVALID_ADDRESS`, `TOKEN_NOT_FOUND`, `BUDGET_EXHAUSTED`, `IDEMPOTENCY_CONFLICT`, `RATE_LIMITED`.
+
+## Onchain: VerdictOracle on Robinhood Chain
+
+verdictagent runs on **Robinhood Chain mainnet (chain id 4663)**: market data comes from DexScreener (`robinhood`), holders from the chain's RPC. Verdicts can be written to the `VerdictOracle` contract (`contracts/`), so other agents and smart contracts can read them without trusting this API:
+
+- `verdict_scan_token` returns an `onchain` field: the recorded verdict and `matchesCurrent` (same `inputsHash` as the scan you just got).
+- `verdict_attest_token` writes the current verdict; identical inputs already onchain send no transaction.
+- Contracts can gate on `isHealthy(token, minScore, maxAge)`.
+
+The contract holds no funds and is not upgradeable. Deploy runbook and checklist: [contracts/README.md](contracts/README.md).
 
 ## How the score works
 
@@ -127,9 +139,9 @@ Switch an adapter off with `DISABLE_SOURCES=dexscreener` (or `rpc`, `basedbot`):
 
 ## Asumsi
 
-- **Chain.** Ekosistem BasedBot dianggap berada di Base; DexScreener memakai `chainId=base` (`DEX_CHAIN_ID`).
+- **Chain.** Target produk adalah Robinhood Chain mainnet (chain id 4663, live sejak 2026-07-01); DexScreener `chainId=robinhood`, RPC publik yang melayani `eth_getLogs` (globalstake, thirdweb, pocket, tatum).
 - **BasedBot tidak punya skema publik.** Adapter dibangun dari env (`BASEDBOT_BASE_URL` + template path), parser menerima beberapa nama field umum, dan hasilnya selalu `complete:false` sampai `BASEDBOT_SCHEMA_VERIFIED=1`. Tidak ada skema yang dikarang.
-- **Holder dari RPC biasa bersifat perkiraan.** Node JSON-RPC tidak punya method holder, jadi holder direkonstruksi dari log `Transfer` pada `RPC_LOG_RANGE` blok terakhir lalu dicek ulang dengan `balanceOf`. Hasilnya ditandai `approximate` dan confidence −0.3 (bagian 20). `holder_growth_24h` tidak tersedia dari RPC.
+- **Holder dari RPC biasa bersifat perkiraan.** Block Robinhood Chain ~0.1 detik, jadi jendela default 400.000 block ≈ 11 jam riwayat Transfer. Holder yang lama diam tidak terlihat; holder berupa kontrak (pool, PoolManager v4, router) dikecualikan dari top-10. Node JSON-RPC tidak punya method holder, jadi holder direkonstruksi dari log `Transfer` pada `RPC_LOG_RANGE` blok terakhir lalu dicek ulang dengan `balanceOf`. Hasilnya ditandai `approximate` dan confidence −0.3 (bagian 20). `holder_growth_24h` tidak tersedia dari RPC.
 - **Unique wallets.** API publik DexScreener tidak menyediakan jumlah wallet unik, jadi `unique_ratio` tidak tersedia kecuali ada sumber lain.
 - **Honeypot dan funding source** butuh simulasi jual dan trace transaksi (indexer / `debug_trace`); RPC biasa tidak bisa, jadi keduanya `complete:false` dan override honeypot/bundle hanya aktif bila sumber lain menyediakannya.
 - **Pool/LP/burn** yang dikecualikan dari `top10_share`: alamat pair dari DexScreener, alamat nol, `0x…dEaD`, dan kontrak token itu sendiri.

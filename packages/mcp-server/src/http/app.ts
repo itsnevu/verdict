@@ -69,6 +69,7 @@ export function buildApp(svc: VerdictService, o: { trustProxyHops?: number } = {
   app.post('/v1/watch', tool('default', 'verdict_watch_token', (r) => r.body ?? {}));
   app.post('/v1/registry', tool('default', 'verdict_register_mcp', (r) => r.body ?? {}));
   app.get('/v1/registry', tool('default', 'verdict_registry_search', (r) => { const q = r.query as Q; return { query: q.query, minTrust: num(q.minTrust), limit: num(q.limit) }; }));
+  app.post('/v1/attest', tool('default', 'verdict_attest_token', (r) => r.body ?? {}));
   app.get('/v1/registry/check', tool('default', 'verdict_registry_check', (r) => ({ idOrUrl: (r.query as Q).id ?? (r.query as Q).url })));
 
   app.get('/v1/agents', async (req, reply) => {
@@ -84,9 +85,10 @@ export function buildApp(svc: VerdictService, o: { trustProxyHops?: number } = {
 
   app.get('/v1/health', async (_req, reply) => {
     const [db, cache] = await Promise.all([svc.store.ping(), svc.cache.ping()]);
+    const oracle = svc.oracle ? await svc.oracle.status().then((s) => ({ address: svc.oracle!.address, chainId: svc.oracle!.chainId, writable: svc.oracle!.writable, ...s }), () => ({ address: svc.oracle!.address, chainId: svc.oracle!.chainId, error: 'unreachable' })) : null;
     const ok = db && cache;
     return reply.code(ok ? 200 : 503).send({
-      data: { status: ok ? 'ok' : 'degraded', db, cache, engineVersion: ENGINE_VERSION, sources: svc.sources.map((s) => ({ name: s.name, supports: s.supports ?? 'all' })) },
+      data: { status: ok ? 'ok' : 'degraded', db, cache, engineVersion: ENGINE_VERSION, oracle, sources: svc.sources.map((s) => ({ name: s.name, supports: s.supports ?? 'all' })) },
       brief: ok ? 'Semua komponen sehat.' : 'Ada komponen yang tidak sehat; lihat data.',
       _meta: meta({ costUnits: 0, degraded: !ok }),
       nextActions: [],

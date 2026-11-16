@@ -7,6 +7,9 @@ import { assertPublicUrl, guardedFetch, type Resolver } from './net.js';
 import type { Logger } from './log.js';
 import { silentLogger } from './log.js';
 import type { Store } from './store/types.js';
+import type { OracleClient } from './oracle.js';
+
+export type Oracle = Pick<OracleClient, 'read' | 'attest' | 'blockNumber' | 'writable' | 'txUrl' | 'address' | 'chainId' | 'status'>;
 
 export interface ScanResult {
   verdict: Verdict;
@@ -30,6 +33,8 @@ export interface ServiceDeps {
   resolve?: Resolver;
   /** allow plain http:// for webhooks and probes (local dev only) */
   allowInsecureUrls?: boolean;
+  /** VerdictOracle client; null when not configured */
+  oracle?: Oracle | null;
 }
 
 export const sha = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -46,6 +51,7 @@ export class VerdictService {
   readonly leaderboardMinCalls: number;
   readonly probe: (url: string) => Promise<ProbeResult>;
   readonly checkUrl: (url: string) => Promise<URL>;
+  readonly oracle: Oracle | null;
   private inflight = new Map<string, Promise<ScanResult>>();
 
   constructor(d: ServiceDeps) {
@@ -57,6 +63,7 @@ export class VerdictService {
     this.quotaPerDay = d.quotaPerDay ?? 500;
     this.scanCacheSeconds = d.scanCacheSeconds ?? 45;
     this.leaderboardMinCalls = d.leaderboardMinCalls ?? 200;
+    this.oracle = d.oracle ?? null;
     this.checkUrl = (u) => assertPublicUrl(u, { ...(d.resolve ? { resolve: d.resolve } : {}), allowInsecure: !!d.allowInsecureUrls });
     // probes never follow redirects and never read more than 256 KB
     const capped: typeof fetch = async (u, init) => { const g = await guardedFetch(String(u), { ...init, maxBytes: 256 * 1024 }); return new Response(g.text, { status: g.status >= 200 && g.status <= 599 ? g.status : 502 }); };

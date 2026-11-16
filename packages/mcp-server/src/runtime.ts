@@ -4,6 +4,7 @@ import { MemoryCache, RedisCache, type Cache } from './cache.js';
 import { loadConfig, parseApiKeys, type Config } from './config.js';
 import { createLogger, type Logger } from './log.js';
 import { keyHash } from './mcp/tools.js';
+import { OracleClient } from './oracle.js';
 import { VerdictService } from './service.js';
 import { buildSources } from './sources.js';
 import { MemoryStore } from './store/memory.js';
@@ -39,7 +40,11 @@ export async function bootstrap(env: NodeJS.ProcessEnv = process.env): Promise<{
   for (const k of keys) await store.grantScopes(keyHash(k.key), k.scopes); // only hashes are stored
   const sources = buildSources(cfg);
   log.info('sources', { enabled: sources.map((s) => s.name), disabled: cfg.DISABLE_SOURCES });
-  const svc = new VerdictService({ store, cache, sources, log, quotaPerDay: cfg.QUOTA_UNITS_PER_DAY, scanCacheSeconds: cfg.SCAN_CACHE_SECONDS, leaderboardMinCalls: cfg.LEADERBOARD_MIN_CALLS, allowInsecureUrls: cfg.ALLOW_INSECURE_URLS === '1' });
+  const oracle = cfg.ORACLE_ADDRESS
+    ? new OracleClient({ address: cfg.ORACLE_ADDRESS as `0x${string}`, rpcUrl: cfg.ORACLE_RPC_URL ?? cfg.RPC_URL ?? 'https://rpc-robinhood.globalstake.io', chainId: cfg.ORACLE_CHAIN_ID, ...(cfg.ATTESTER_PRIVATE_KEY ? { privateKey: cfg.ATTESTER_PRIVATE_KEY as `0x${string}` } : {}) })
+    : null;
+  if (oracle) log.info('oracle', { address: oracle.address, chainId: oracle.chainId, writable: oracle.writable });
+  const svc = new VerdictService({ oracle,  store, cache, sources, log, quotaPerDay: cfg.QUOTA_UNITS_PER_DAY, scanCacheSeconds: cfg.SCAN_CACHE_SECONDS, leaderboardMinCalls: cfg.LEADERBOARD_MIN_CALLS, allowInsecureUrls: cfg.ALLOW_INSECURE_URLS === '1' });
   return { cfg, svc, log, shutdown: async () => { await Promise.allSettled([store.close(), cache.close()]); } };
 }
 
