@@ -1,0 +1,48 @@
+{
+  "synthetic": true,
+  "address": "0x000000000000000000000000000000000000a005",
+  "now": "2026-11-16T12:00:00.000Z",
+  "market": {
+    "symbol": "DGRAD",
+    "name": "Dgrad",
+    "pairAddress": "0x000000000000000000000000000000000000e162",
+    "priceUsd": 0.0003,
+    "mcUsd": 300000,
+    "liqUsd": 60000,
+    "vol6hUsd": 150000,
+    "vol24hUsd": 500000,
+    "tx24h": 1700,
+    "buys24h": 900,
+    "sells24h": 800,
+    "uniqueWallets24h": 700,
+    "pairCreatedAt": "2026-11-14T20:00:00.000Z"
+  },
+  "marketFetchedAt": "2026-11-16T12:00:00.000Z",
+  "holders": null,
+  "earlyBuyers": null,
+  "contract": null,
+  "launch": null,
+  "sizeVariance": null,
+  "sources": [
+    {
+      "name": "dexscreener",
+      "method": "getMarket",
+      "fetchedAt": "2026-11-16T12:00:00.000Z",
+      "complete": true
+    },
+    {
+      "name": "rpc",
+      "method": "getHolders",
+      "fetchedAt": "2026-11-16T12:00:00.000Z",
+      "complete": false,
+      "error": "holder source down"
+    },
+    {
+      "name": "basedbot",
+      "method": "getLaunchMeta",
+      "fetchedAt": "2026-11-16T12:00:00.000Z",
+      "complete": false,
+      "error": "schema unverified"
+    }
+  ]
+}
