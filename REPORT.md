@@ -51,7 +51,7 @@ pnpm smoke                                                     # verifikasi end-
 
 | cek | hasil |
 |---|---|
-| `pnpm test --coverage` | 62/62 test hijau (5 file) |
+| `pnpm test --coverage` | 72/72 test hijau (5 file) |
 | coverage `core/src/score` | lines 99.2% · branches 93.8% · functions 100% |
 | coverage `mcp-server/src/mcp` | lines 100% · branches 86.1% · functions 97.0% |
 | `pnpm typecheck` | bersih (tsc strict, noUnused*, noUncheckedIndexedAccess) |
@@ -72,10 +72,10 @@ pnpm smoke                                                     # verifikasi end-
 | semua · getFundingSource | trace sumber dana butuh indexer / `debug_trace`; tanpa ini override BUNDLED tidak bisa aktif pada data nyata |
 | DexScreener · uniqueWallets24h (field) | tidak ada di API publik; sinyal `unique_ratio` unavailable pada data nyata |
 
-## TODO(simplified) dan TODO(blocked)
+## Penanda simplified dan blocked
 
-- TODO(simplified): tidak ada di kode.
-- TODO(blocked): `docker compose up` dan `PgStore` + migrasi terhadap Postgres sungguhan belum dijalankan; daemon Docker tidak aktif. Detail di PROGRESS.md.
+- simplified: tidak ada penanda di kode.
+- blocked: `docker compose up` dan `PgStore` + migrasi terhadap Postgres sungguhan belum dijalankan; daemon Docker tidak aktif. Detail di PROGRESS.md.
 
 ## 5 langkah lanjutan paling bernilai
 
