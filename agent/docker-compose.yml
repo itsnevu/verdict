@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: verdict
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: verdict
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verdict -d verdict"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://verdict:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/verdict
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+    ports: ["8080:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["node", "dist/worker-main.js"]
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://verdict:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/verdict
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+volumes:
+  pgdata:
