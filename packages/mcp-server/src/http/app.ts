@@ -17,8 +17,9 @@ function ctxOf(req: FastifyRequest): CallCtx {
   return { agentId: agent || `anon:${req.ip}`, apiKey, ip: req.ip };
 }
 
-export function buildApp(svc: VerdictService) {
-  const app = Fastify({ logger: false, trustProxy: true, bodyLimit: 256 * 1024 });
+export function buildApp(svc: VerdictService, o: { trustProxyHops?: number } = {}) {
+  // only trust X-Forwarded-For from a known number of proxies; otherwise clients could spoof their IP to dodge limits
+  const app = Fastify({ logger: false, trustProxy: o.trustProxyHops ? (_addr: string, hop: number) => hop < o.trustProxyHops! : false, bodyLimit: 256 * 1024 });
 
   const limit = async (req: FastifyRequest, reply: FastifyReply, bucket: string) => {
     const max = LIMITS[bucket] ?? LIMITS.default!;

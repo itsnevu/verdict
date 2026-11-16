@@ -10,6 +10,7 @@ describe('seed data', () => {
     const r = await seed(store, svc.now());
     expect(r).toMatchObject({ skipped: false, calls: 240, endpoints: 4 });
     expect((await seed(store, svc.now())).skipped).toBe(true);
+    await expect(seed(store, svc.now(), () => {}, { NODE_ENV: 'production' })).rejects.toThrow(/refusing/);
 
     const app = buildApp(svc);
     const lb = (await app.inject({ url: '/v1/agents' })).json().data;

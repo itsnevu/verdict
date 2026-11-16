@@ -62,6 +62,7 @@ export const mcpEndpoints = pgTable('mcp_endpoints', {
   contractTargets: jsonb('contract_targets').$type<string[]>().notNull(),
   registeredAt: ts('registered_at').notNull(),
   ownerAgentId: text('owner_agent_id'),
+  ownerKey: text('owner_key'),
   probe: jsonb('probe'),
   trust: integer('trust'),
   idempotencyKey: text('idempotency_key').notNull(),
@@ -83,10 +84,24 @@ export const agentCalls = pgTable('agent_calls', {
   costUnits: doublePrecision('cost_units').notNull(),
   durationMs: integer('duration_ms').notNull(),
   ok: boolean('ok').notNull(),
-}, (t) => [index('agent_calls_agent_ts').on(t.agentId, t.ts)]);
+  quotaKey: text('quota_key'),
+  authenticated: boolean('authenticated').notNull().default(false),
+}, (t) => [index('agent_calls_agent_ts').on(t.agentId, t.ts), index('agent_calls_quota_ts').on(t.quotaKey, t.ts)]);
 
 export const scopes = pgTable('scopes', {
   apiKey: text('api_key').primaryKey(),
   scopes: jsonb('scopes').$type<string[]>().notNull(),
   createdAt: ts('created_at').notNull(),
 });
+
+export const watches = pgTable('watches', {
+  id: text('id').primaryKey(),
+  addr: text('addr').notNull(),
+  ownerKey: text('owner_key').notNull(),
+  agentId: text('agent_id'),
+  webhookUrl: text('webhook_url'),
+  watchedUntil: ts('watched_until').notNull(),
+  nextPollAt: ts('next_poll_at').notNull(),
+  idemKey: text('idem_key').notNull(),
+  argsHash: text('args_hash').notNull(),
+}, (t) => [uniqueIndex('watches_owner_idem').on(t.ownerKey, t.idemKey), index('watches_next_poll').on(t.nextPollAt), index('watches_addr').on(t.addr)]);

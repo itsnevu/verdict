@@ -15,11 +15,15 @@ export interface ScoreRow {
 }
 
 export interface Watch {
+  /** sha256(ownerKey + address) */
+  id: string;
   address: string;
+  /** sha256 of the API key that created it; watches are isolated per owner */
+  ownerKey: string;
+  agentId: string | null;
   webhookUrl: string | null;
   watchedUntil: string;
   nextPollAt: string;
-  agentId: string | null;
   idempotencyKey: string;
   argsHash: string;
 }
@@ -40,6 +44,8 @@ export interface Endpoint {
   contractTargets: string[];
   registeredAt: string;
   ownerAgentId: string | null;
+  /** sha256 of the API key that registered it; only that key may update the entry */
+  ownerKey: string | null;
   probe: ProbeResult | null;
   trust: number | null;
   idempotencyKey: string;
@@ -48,6 +54,10 @@ export interface Endpoint {
 
 export interface AgentCall {
   agentId: string;
+  /** what the daily quota is charged to: key:<hash> when authenticated, else ip:<addr> */
+  quotaKey: string;
+  /** true when the call carried a valid API key; only these count for the leaderboard */
+  authenticated: boolean;
   tool: string;
   address: string | null;
   ts: string;
@@ -65,22 +75,24 @@ export interface Store {
   /** first score at or after `atIso` */
   scoreAtOrAfter(address: string, atIso: string): Promise<ScoreRow | null>;
 
-  getWatchByKey(idempotencyKey: string): Promise<Watch | null>;
+  getWatchByKey(ownerKey: string, idempotencyKey: string): Promise<Watch | null>;
   upsertWatch(w: Watch): Promise<void>;
   dueWatches(nowIso: string, limit: number): Promise<Watch[]>;
+  /** every active watch on a token (all owners) */
+  watchersOf(address: string, nowIso: string): Promise<Watch[]>;
   setNextPoll(address: string, iso: string): Promise<void>;
 
   /** returns false when the dedupe key already exists */
   insertAlert(a: AlertRow): Promise<boolean>;
   listAlerts(address?: string): Promise<AlertRow[]>;
 
-  getEndpointByKey(idempotencyKey: string): Promise<Endpoint | null>;
+  getEndpointByKey(ownerKey: string, idempotencyKey: string): Promise<Endpoint | null>;
   getEndpoint(idOrUrl: string): Promise<Endpoint | null>;
   saveEndpoint(e: Endpoint): Promise<void>;
   searchEndpoints(q: { query?: string; minTrust?: number; limit: number }): Promise<Endpoint[]>;
 
   recordCall(c: AgentCall): Promise<void>;
-  unitsUsedSince(agentId: string, sinceIso: string): Promise<number>;
+  unitsUsedSince(quotaKey: string, sinceIso: string): Promise<number>;
   totalCalls(): Promise<number>;
   scanCalls(): Promise<AgentCall[]>;
 

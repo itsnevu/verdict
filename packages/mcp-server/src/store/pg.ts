@@ -58,23 +58,26 @@ export class PgStore implements Store {
     return r ? this.row(r) : null;
   }
 
-  private watch(r: typeof t.tokens.$inferSelect): Watch | null {
-    if (!r.watchIdemKey || !r.watchedUntil || !r.nextPollAt) return null;
-    return { address: r.addr, webhookUrl: r.webhookUrl, watchedUntil: iso(r.watchedUntil)!, nextPollAt: iso(r.nextPollAt)!, agentId: r.watchAgentId, idempotencyKey: r.watchIdemKey, argsHash: r.watchArgsHash ?? '' };
+  private watch(r: typeof t.watches.$inferSelect): Watch {
+    return { id: r.id, address: r.addr, ownerKey: r.ownerKey, agentId: r.agentId, webhookUrl: r.webhookUrl, watchedUntil: iso(r.watchedUntil)!, nextPollAt: iso(r.nextPollAt)!, idempotencyKey: r.idemKey, argsHash: r.argsHash };
   }
-  async getWatchByKey(k: string) {
-    const [r] = await this.db.select().from(t.tokens).where(eq(t.tokens.watchIdemKey, k)).limit(1);
+  async getWatchByKey(owner: string, k: string) {
+    const [r] = await this.db.select().from(t.watches).where(and(eq(t.watches.ownerKey, owner), eq(t.watches.idemKey, k))).limit(1);
     return r ? this.watch(r) : null;
   }
   async upsertWatch(w: Watch) {
-    const set = { webhookUrl: w.webhookUrl, watchedUntil: w.watchedUntil, nextPollAt: w.nextPollAt, watchAgentId: w.agentId, watchIdemKey: w.idempotencyKey, watchArgsHash: w.argsHash };
-    await this.db.insert(t.tokens).values({ addr: w.address, firstSeen: new Date().toISOString(), ...set }).onConflictDoUpdate({ target: t.tokens.addr, set });
+    const v = { id: w.id, addr: w.address, ownerKey: w.ownerKey, agentId: w.agentId, webhookUrl: w.webhookUrl, watchedUntil: w.watchedUntil, nextPollAt: w.nextPollAt, idemKey: w.idempotencyKey, argsHash: w.argsHash };
+    await this.db.insert(t.watches).values(v).onConflictDoUpdate({ target: t.watches.id, set: v });
   }
   async dueWatches(nowIso: string, limit: number) {
-    const rows = await this.db.select().from(t.tokens).where(and(lte(t.tokens.nextPollAt, nowIso), gte(t.tokens.watchedUntil, nowIso))).orderBy(asc(t.tokens.nextPollAt)).limit(limit);
-    return rows.map((r) => this.watch(r)).filter((w): w is Watch => !!w);
+    const rows = await this.db.select().from(t.watches).where(and(lte(t.watches.nextPollAt, nowIso), gte(t.watches.watchedUntil, nowIso))).orderBy(asc(t.watches.nextPollAt)).limit(limit);
+    return rows.map((r) => this.watch(r));
   }
-  async setNextPoll(address: string, isoTs: string) { await this.db.update(t.tokens).set({ nextPollAt: isoTs }).where(eq(t.tokens.addr, address)); }
+  async watchersOf(address: string, nowIso: string) {
+    const rows = await this.db.select().from(t.watches).where(and(eq(t.watches.addr, address), gte(t.watches.watchedUntil, nowIso)));
+    return rows.map((r) => this.watch(r));
+  }
+  async setNextPoll(address: string, isoTs: string) { await this.db.update(t.watches).set({ nextPollAt: isoTs }).where(eq(t.watches.addr, address)); }
 
   async insertAlert(a: AlertRow) {
     const res = await this.db.insert(t.alerts).values({ dedupeKey: a.dedupeKey, addr: a.address, kind: a.kind, ts: a.ts, payload: a.payload, delivered: a.delivered })
@@ -87,10 +90,10 @@ export class PgStore implements Store {
   }
 
   private ep(r: typeof t.mcpEndpoints.$inferSelect): Endpoint {
-    return { id: r.id, url: r.url, declaredTools: r.declaredTools as DeclaredTool[], contractTargets: r.contractTargets, registeredAt: iso(r.registeredAt)!, ownerAgentId: r.ownerAgentId, probe: r.probe as ProbeResult | null, trust: r.trust, idempotencyKey: r.idempotencyKey, argsHash: r.argsHash };
+    return { id: r.id, url: r.url, declaredTools: r.declaredTools as DeclaredTool[], contractTargets: r.contractTargets, registeredAt: iso(r.registeredAt)!, ownerAgentId: r.ownerAgentId, ownerKey: r.ownerKey ?? null, probe: r.probe as ProbeResult | null, trust: r.trust, idempotencyKey: r.idempotencyKey, argsHash: r.argsHash };
   }
-  async getEndpointByKey(k: string) {
-    const [r] = await this.db.select().from(t.mcpEndpoints).where(eq(t.mcpEndpoints.idempotencyKey, k)).limit(1);
+  async getEndpointByKey(owner: string, k: string) {
+    const [r] = await this.db.select().from(t.mcpEndpoints).where(and(eq(t.mcpEndpoints.ownerKey, owner), eq(t.mcpEndpoints.idempotencyKey, k))).limit(1);
     return r ? this.ep(r) : null;
   }
   async getEndpoint(idOrUrl: string) {
@@ -98,7 +101,7 @@ export class PgStore implements Store {
     return r ? this.ep(r) : null;
   }
   async saveEndpoint(e: Endpoint) {
-    const v = { id: e.id, url: e.url, declaredTools: e.declaredTools, contractTargets: e.contractTargets, registeredAt: e.registeredAt, ownerAgentId: e.ownerAgentId, probe: e.probe, trust: e.trust, idempotencyKey: e.idempotencyKey, argsHash: e.argsHash };
+    const v = { id: e.id, url: e.url, declaredTools: e.declaredTools, contractTargets: e.contractTargets, registeredAt: e.registeredAt, ownerAgentId: e.ownerAgentId, ownerKey: e.ownerKey, probe: e.probe, trust: e.trust, idempotencyKey: e.idempotencyKey, argsHash: e.argsHash };
     await this.db.insert(t.mcpEndpoints).values(v).onConflictDoUpdate({ target: t.mcpEndpoints.id, set: v });
   }
   async searchEndpoints(q: { query?: string; minTrust?: number; limit: number }) {
@@ -110,12 +113,12 @@ export class PgStore implements Store {
   }
 
   async recordCall(c: AgentCall) {
-    await this.db.insert(t.agentCalls).values({ agentId: c.agentId, tool: c.tool, addr: c.address, ts: c.ts, costUnits: c.costUnits, durationMs: Math.round(c.durationMs), ok: c.ok });
+    await this.db.insert(t.agentCalls).values({ agentId: c.agentId, tool: c.tool, addr: c.address, ts: c.ts, costUnits: c.costUnits, durationMs: Math.round(c.durationMs), ok: c.ok, quotaKey: c.quotaKey, authenticated: c.authenticated });
     await this.db.insert(t.agents).values({ id: c.agentId, firstSeen: c.ts, lastSeen: c.ts }).onConflictDoUpdate({ target: t.agents.id, set: { lastSeen: c.ts } });
   }
-  async unitsUsedSince(agentId: string, sinceIso: string) {
+  async unitsUsedSince(quotaKey: string, sinceIso: string) {
     const [r] = await this.db.select({ s: sql<number>`coalesce(sum(${t.agentCalls.costUnits}), 0)` }).from(t.agentCalls)
-      .where(and(eq(t.agentCalls.agentId, agentId), gte(t.agentCalls.ts, sinceIso), eq(t.agentCalls.ok, true)));
+      .where(and(eq(t.agentCalls.quotaKey, quotaKey), gte(t.agentCalls.ts, sinceIso), eq(t.agentCalls.ok, true)));
     return Number(r?.s ?? 0);
   }
   async totalCalls() {
@@ -123,8 +126,8 @@ export class PgStore implements Store {
     return Number(r?.n ?? 0);
   }
   async scanCalls() {
-    const rows = await this.db.select().from(t.agentCalls).where(and(eq(t.agentCalls.tool, 'verdict_scan_token'), eq(t.agentCalls.ok, true)));
-    return rows.filter((r) => r.addr).map((r) => ({ agentId: r.agentId, tool: r.tool, address: r.addr, ts: iso(r.ts)!, costUnits: r.costUnits, durationMs: r.durationMs, ok: r.ok }));
+    const rows = await this.db.select().from(t.agentCalls).where(and(eq(t.agentCalls.tool, 'verdict_scan_token'), eq(t.agentCalls.ok, true), eq(t.agentCalls.authenticated, true)));
+    return rows.filter((r) => r.addr).map((r) => ({ agentId: r.agentId, tool: r.tool, address: r.addr, ts: iso(r.ts)!, costUnits: r.costUnits, durationMs: r.durationMs, ok: r.ok, quotaKey: r.quotaKey ?? '', authenticated: r.authenticated }));
   }
 
   async scopesFor(k: string) {

@@ -96,8 +96,8 @@ describe('agents leaderboard', () => {
     expect((await app.inject({ url: '/v1/agents' })).json().data.active).toBe(false);
     // good agent scans the healthy token, bad agent scans the dying one
     for (let i = 0; i < 110; i++) {
-      await store.recordCall({ agentId: 'good', tool: 'verdict_scan_token', address: T.rushr, ts: svc.nowIso(), costUnits: 1, durationMs: 1, ok: true });
-      await store.recordCall({ agentId: 'bad', tool: 'verdict_scan_token', address: T.nifty, ts: svc.nowIso(), costUnits: 1, durationMs: 1, ok: true });
+      await store.recordCall({ agentId: 'good', quotaKey: 'key:good', authenticated: true, tool: 'verdict_scan_token', address: T.rushr, ts: svc.nowIso(), costUnits: 1, durationMs: 1, ok: true });
+      await store.recordCall({ agentId: 'bad', quotaKey: 'key:bad', authenticated: true, tool: 'verdict_scan_token', address: T.nifty, ts: svc.nowIso(), costUnits: 1, durationMs: 1, ok: true });
     }
     advance(7 * 3_600_000);
     await svc.scan(T.rushr);
@@ -154,15 +154,15 @@ describe('worker and alerts', () => {
 
   it('backs off to 10 minutes for idle tokens and survives poll failures', async () => {
     const { svc, store } = makeSvc();
-    await store.upsertWatch({ address: T.rushr, webhookUrl: null, watchedUntil: '2026-11-17T00:00:00.000Z', nextPollAt: '2026-11-16T11:00:00.000Z', agentId: null, idempotencyKey: 'idle-1', argsHash: 'h' });
+    await store.upsertWatch({ id: 'w-idle', ownerKey: 'o1', address: T.rushr, webhookUrl: null, watchedUntil: '2026-11-17T00:00:00.000Z', nextPollAt: '2026-11-16T11:00:00.000Z', agentId: null, idempotencyKey: 'idle-1', argsHash: 'h' });
     const realScan = svc.scan.bind(svc);
     svc.scan = async (a) => { const r = await realScan(a); return { ...r, inputs: { ...r.inputs, market: { ...r.inputs.market!, vol6hUsd: 0 } } }; };
     await tick(svc, { random: () => 0.5 });
-    expect(store.watches.get(T.rushr)!.nextPollAt).toBe('2026-11-16T12:10:00.000Z');
-    store.watches.get(T.rushr)!.nextPollAt = '2026-11-16T11:00:00.000Z';
+    expect(store.watches.get('w-idle')!.nextPollAt).toBe('2026-11-16T12:10:00.000Z');
+    store.watches.get('w-idle')!.nextPollAt = '2026-11-16T11:00:00.000Z';
     svc.scan = async () => { throw new Error('down'); };
     expect((await tick(svc)).fired).toEqual([]);
-    expect(store.watches.get(T.rushr)!.nextPollAt).toBe('2026-11-16T12:02:00.000Z');
+    expect(store.watches.get('w-idle')!.nextPollAt).toBe('2026-11-16T12:02:00.000Z');
     const w = startWorker(svc, { random: () => 0.5 });
     await w.stop();
   });
@@ -173,14 +173,16 @@ describe('config and sources', () => {
     const cfg = loadConfig({ DISABLE_SOURCES: 'RPC, basedbot', USE_MOCK_SOURCE: '1', API_KEYS: 'k1:watch|registry,k2:watch' });
     expect(cfg.DISABLE_SOURCES).toEqual(['rpc', 'basedbot']);
     expect(parseApiKeys(cfg.API_KEYS)).toEqual([{ key: 'k1', scopes: ['watch', 'registry'] }, { key: 'k2', scopes: ['watch'] }]);
-    const names = buildSources(cfg).map((s) => s.name);
-    expect(names).toEqual(['mock', 'dexscreener']);
-    expect(buildSources(loadConfig({})).map((s) => s.constructor)).toEqual([DexScreenerSource, RpcSource, BasedBotSource]);
+    expect(buildSources(cfg).map((s) => s.name)).toEqual(['mock', 'dexscreener']);
+    // adapters without config are left out instead of costing confidence on every scan
+    expect(buildSources(loadConfig({})).map((s) => s.constructor)).toEqual([DexScreenerSource]);
+    expect(buildSources(loadConfig({ RPC_URL: 'https://rpc.example', BASEDBOT_BASE_URL: 'https://bb.example', BASEDBOT_LAUNCH_PATH: '/t/{address}' })).map((s) => s.constructor)).toEqual([DexScreenerSource, RpcSource, BasedBotSource]);
   });
   it('a scan still completes, degraded, with one adapter switched off', async () => {
     const cfg = loadConfig({ DISABLE_SOURCES: 'dexscreener', USE_MOCK_SOURCE: '1' });
-    const { svc } = makeSvc({ sources: [...buildSources(cfg).filter((s) => s.name !== 'mock'), fixtureSource(() => '2026-11-16T12:00:00.000Z')] });
-    const r = await svc.scan(T.rushr);
+    expect(buildSources(cfg).map((s) => s.name)).toEqual(['mock']);
+    const { svc } = makeSvc({ sources: [fixtureSource(() => '2026-11-16T12:00:00.000Z')] });
+    const r = await svc.scan(T.degraded);
     expect(r.verdict.score).not.toBeNull();
     expect(r.sources.some((s) => !s.complete)).toBe(true);
   });

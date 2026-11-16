@@ -51,7 +51,7 @@ pnpm smoke                                                     # verifikasi end-
 
 | cek | hasil |
 |---|---|
-| `pnpm test --coverage` | 72/72 test hijau (5 file) |
+| `pnpm test --coverage` | 85/85 test hijau (6 file) |
 | coverage `core/src/score` | lines 99.2% · branches 93.8% · functions 100% |
 | coverage `mcp-server/src/mcp` | lines 100% · branches 86.1% · functions 97.0% |
 | `pnpm typecheck` | bersih (tsc strict, noUnused*, noUncheckedIndexedAccess) |
@@ -80,6 +80,12 @@ pnpm smoke                                                     # verifikasi end-
 
 - simplified: tidak ada penanda di kode.
 - blocked: tidak ada. Verifikasi Docker dan Postgres selesai (PROGRESS baris 10).
+
+## Audit kesiapan mainnet (2026-11-16)
+
+Diperbaiki dan diverifikasi di compose produksi: SSRF pada webhook dan probe MCP, rate limit yang bisa di-bypass lewat X-Forwarded-For, watch yang saling timpa antar-agent, idempotency key yang bocor antar-agent, pengambilalihan entri registry, kuota/leaderboard yang bisa dimanipulasi lewat header, API key demo dan plaintext, penalti confidence palsu dari adapter yang tidak dikonfigurasi, seed sintetis di produksi, tagihan ganda compare, contoh alamat tidak valid di nextActions. Landing page tidak lagi menampilkan CA, alamat kontrak, hash, badge verified, atau klaim audit palsu.
+
+Belum dikerjakan (performa, relevan saat data besar): `latestScores` memindai seluruh tabel `scores`; leaderboard menjalankan satu query per scan; `scores` dan `agent_calls` tidak dipangkas; worker tidak punya lock bila dijalankan lebih dari satu replika.
 
 ## 5 langkah lanjutan paling bernilai
 

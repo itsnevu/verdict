@@ -34,7 +34,7 @@ open http://localhost:8080/?address=0x000000000000000000000000000000000000a002
 With Postgres, Redis and the alert worker:
 
 ```bash
-cp .env.example .env          # set RPC_URL for holder data
+cp .env.example .env          # set POSTGRES_PASSWORD, API_KEYS, and RPC_URL for holder data
 docker compose up -d --build
 curl localhost:8080/v1/health
 docker compose exec api node dist/seed.js   # optional: synthetic history, registry, leaderboard
@@ -103,6 +103,15 @@ Errors keep the same shape with `error: {code, message, retryable, fix}`, e.g. `
 ## How the score works
 
 Nine signals, each mapped through a piecewise-linear clamp, weighted: `liq_ratio` 0.18, `top10_share` 0.18, `dev_share` 0.14, `vol_mc` 0.14, `vol_trend` 0.12, `unique_ratio` 0.10, `holder_growth_24h` 0.08, `buy_sell_ratio` 0.04, `age_hours` 0.02. Missing signals are reported as `unavailable` and their weight is shared proportionally. Overrides then run in order: honeypot cap 25, dev > 50% cap 35, liquidity < $3000 cap 30, no volume after 24h → DEAD, bundled launch × 0.85, wash trading → confidence −0.2. Labels: ≥75 HEALTHY, 55–74 WATCH, 35–54 DECAYING, 20–34 COLLAPSING, < 20 DEAD. The point tables live in `packages/core/src/score/signals.ts`; `verdict_explain_score` returns them.
+
+## Security notes
+
+- Every server-side request to a caller-supplied URL (webhooks, MCP probes) goes through `src/net.ts`: https only, no credentials, no internal host names, every resolved IP must be public, redirects are not followed, bodies are capped. Set `ALLOW_INSECURE_URLS=1` only for local dev.
+- API keys are stored as sha256 hashes. With `NODE_ENV=production` (compose sets it) keys shorter than 24 characters or starting with `dev`/`test`/`demo` are refused. Generate keys with `openssl rand -hex 24`.
+- Watches and registry entries belong to the API key that created them. Idempotency keys are scoped per key.
+- Daily quota is charged to the API key, or to the client IP when there is none. `X-Agent-Id` is for logs only. The leaderboard only counts authenticated calls.
+- `X-Forwarded-For` is ignored unless `TRUST_PROXY_HOPS` is set to the number of proxies in front of the API.
+- `seed.js` refuses to run with `NODE_ENV=production` unless `ALLOW_SEED=1`.
 
 ## Develop
 

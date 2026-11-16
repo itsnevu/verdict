@@ -12,3 +12,4 @@ export * from './store/memory.js';
 export * from './store/types.js';
 export * from './worker/alerts.js';
 export * from './worker/worker.js';
+export * from './net.js';

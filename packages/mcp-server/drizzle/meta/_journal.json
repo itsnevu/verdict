@@ -15,6 +15,13 @@
       "when": 1763290800000,
       "tag": "0001_scores_liq_usd",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1763298000000,
+      "tag": "0002_watches_owners_quota",
+      "breakpoints": true
     }
   ]
 }

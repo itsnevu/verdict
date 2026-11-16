@@ -3,6 +3,7 @@ import {
   buildBrief, collectInputs, errors, evaluate, probeMcp, type DataSource, type ProbeResult, type SourceStatus, type TokenInputs, type Verdict,
 } from '@verdictagent/core';
 import type { Cache } from './cache.js';
+import { assertPublicUrl, guardedFetch, type Resolver } from './net.js';
 import type { Logger } from './log.js';
 import { silentLogger } from './log.js';
 import type { Store } from './store/types.js';
@@ -25,6 +26,10 @@ export interface ServiceDeps {
   scanCacheSeconds?: number;
   leaderboardMinCalls?: number;
   probe?: (url: string) => Promise<ProbeResult>;
+  /** DNS resolver for the SSRF guard (tests inject one) */
+  resolve?: Resolver;
+  /** allow plain http:// for webhooks and probes (local dev only) */
+  allowInsecureUrls?: boolean;
 }
 
 export const sha = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -40,6 +45,7 @@ export class VerdictService {
   readonly scanCacheSeconds: number;
   readonly leaderboardMinCalls: number;
   readonly probe: (url: string) => Promise<ProbeResult>;
+  readonly checkUrl: (url: string) => Promise<URL>;
   private inflight = new Map<string, Promise<ScanResult>>();
 
   constructor(d: ServiceDeps) {
@@ -51,7 +57,10 @@ export class VerdictService {
     this.quotaPerDay = d.quotaPerDay ?? 500;
     this.scanCacheSeconds = d.scanCacheSeconds ?? 45;
     this.leaderboardMinCalls = d.leaderboardMinCalls ?? 200;
-    this.probe = d.probe ?? ((u) => probeMcp(u));
+    this.checkUrl = (u) => assertPublicUrl(u, { ...(d.resolve ? { resolve: d.resolve } : {}), allowInsecure: !!d.allowInsecureUrls });
+    // probes never follow redirects and never read more than 256 KB
+    const capped: typeof fetch = async (u, init) => { const g = await guardedFetch(String(u), { ...init, maxBytes: 256 * 1024 }); return new Response(g.text, { status: g.status >= 200 && g.status <= 599 ? g.status : 502 }); };
+    this.probe = d.probe ?? ((u) => probeMcp(u, capped));
   }
 
   nowIso() { return this.now().toISOString(); }
@@ -86,9 +95,9 @@ export class VerdictService {
     return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString();
   }
 
-  async budget(agentId: string) {
-    const used = await this.store.unitsUsedSince(agentId, this.dayStart());
+  async budget(quotaKey: string) {
+    const used = await this.store.unitsUsedSince(quotaKey, this.dayStart());
     const reset = new Date(Date.parse(this.dayStart()) + 86_400_000).toISOString();
-    return { agentId, quotaUnits: this.quotaPerDay, usedUnits: Math.round(used * 100) / 100, remainingUnits: Math.max(0, Math.round((this.quotaPerDay - used) * 100) / 100), resetsAt: reset };
+    return { quotaKey, quotaUnits: this.quotaPerDay, usedUnits: Math.round(used * 100) / 100, remainingUnits: Math.max(0, Math.round((this.quotaPerDay - used) * 100) / 100), resetsAt: reset };
   }
 }

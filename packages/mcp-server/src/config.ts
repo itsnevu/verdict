@@ -26,6 +26,11 @@ const Env = z.object({
   WORKER_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
   SNAPSHOT_RETENTION_DAYS: z.coerce.number().int().min(30).default(30),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  /** number of reverse proxies in front of the API (0 = trust none; X-Forwarded-For is ignored) */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+  /** local dev only: allow http:// webhooks and probe targets */
+  ALLOW_INSECURE_URLS: z.enum(['0', '1']).default('0'),
+  NODE_ENV: z.string().default('development'),
 });
 
 export type Config = z.infer<typeof Env>;

@@ -7,10 +7,16 @@ import { sha, type VerdictService } from '../service.js';
 import type { Endpoint } from '../store/types.js';
 
 export interface CallCtx {
+  /** self-declared (X-Agent-Id / _meta.agent_id); used for logs only, never for quota or ownership */
   agentId: string;
   apiKey: string | null;
   ip?: string;
 }
+
+/** sha256 of the API key; what ownership and authenticated quota are bound to */
+export const keyHash = (apiKey: string) => sha(`verdict-key:${apiKey}`);
+/** quota identity: the API key when present, else the client IP (headers cannot reset it) */
+export const quotaKeyOf = (c: CallCtx) => (c.apiKey ? `key:${keyHash(c.apiKey).slice(0, 24)}` : `ip:${c.ip ?? c.agentId}`);
 
 const addr = z.string().describe('token contract address, 0x + 40 hex (any case)');
 const LABELS = ['HEALTHY', 'WATCH', 'DECAYING', 'COLLAPSING', 'DEAD'] as const;
@@ -70,7 +76,7 @@ export const TOOL_DEFS = [
       return {
         data,
         brief: data.length ? `${data.length} token terdaftar${a.label ? ` dengan label ${a.label}` : ''}; teratas ${(top!.symbol ?? top!.address).toUpperCase()} skor ${top!.score} (${top!.label}).` : 'Belum ada token yang cocok dengan filter ini.',
-        nextActions: checkActions(top ? [{ tool: 'verdict_scan_token', reason: 'refresh the top candidate before acting', args: { address: top.address } }] : [{ tool: 'verdict_scan_token', reason: 'scan a token to add it to the list', args: { address: '0x…' } }]),
+        nextActions: checkActions(top ? [{ tool: 'verdict_scan_token', reason: 'refresh the top candidate before acting', args: { address: top.address } }] : []),
         _meta: { confidence: null },
       };
     },
@@ -118,7 +124,7 @@ export const TOOL_DEFS = [
     description:
       'Scan 2-5 tokens and rank them by score in one call. Use when choosing between candidates. Cost: 1 unit per address.',
     input: z.object({ addresses: z.array(addr).min(2).max(5) }),
-    cost: (a) => a.addresses.length * TOOLS.verdict_compare_tokens.cost,
+    cost: (a) => new Set(a.addresses.map((x: string) => x.toLowerCase())).size * TOOLS.verdict_compare_tokens.cost,
     async run(a, _c, svc) {
       const list = [...new Set(a.addresses.map(normAddress))];
       const res = await Promise.all(list.map((x) => svc.scan(x)));
@@ -140,8 +146,8 @@ export const TOOL_DEFS = [
     input: z.object({}),
     cost: () => 0,
     async run(_a, c, svc) {
-      const b = await svc.budget(c.agentId);
-      return { data: b, brief: `Sisa ${b.remainingUnits} dari ${b.quotaUnits} unit, reset ${b.resetsAt}.`, nextActions: checkActions(b.remainingUnits < 1 ? [{ tool: 'verdict_agent_brief', reason: 'cheapest way to keep judging tokens', args: { address: '0x…' } }] : []), _meta: { confidence: null } };
+      const b = await svc.budget(quotaKeyOf(c));
+      return { data: b, brief: `Sisa ${b.remainingUnits} dari ${b.quotaUnits} unit, reset ${b.resetsAt}.`, nextActions: [], _meta: { confidence: null } };
     },
   }),
   def({
@@ -155,15 +161,17 @@ export const TOOL_DEFS = [
     async run(a, c, svc) {
       const address = normAddress(a.address);
       const argsHash = sha({ address, webhookUrl: a.webhookUrl ?? null, ttlHours: a.ttlHours });
-      const prev = await svc.store.getWatchByKey(a.idempotencyKey);
+      const owner = keyHash(c.apiKey!);
+      const prev = await svc.store.getWatchByKey(owner, a.idempotencyKey);
       if (prev) {
         if (prev.argsHash !== argsHash) throw errors.idemConflict();
         return { data: { ...prev, replayed: true }, brief: `Pantauan ${address} sudah aktif sampai ${prev.watchedUntil} (permintaan ulang, tidak dibuat dua kali).`, nextActions: checkActions([{ tool: 'verdict_token_history', reason: 'see what the watch has recorded', args: { address, hours: 24 } }]), _meta: { confidence: null } };
       }
+      if (a.webhookUrl) await svc.checkUrl(a.webhookUrl);
       const r = await svc.scan(address);
       const now = svc.now().getTime();
       const stagger = parseInt(sha(address).slice(0, 6), 16) % 60_000;
-      const w = { address, webhookUrl: a.webhookUrl ?? null, watchedUntil: new Date(now + a.ttlHours * 3_600_000).toISOString(), nextPollAt: new Date(now + 60_000 + stagger).toISOString(), agentId: c.agentId, idempotencyKey: a.idempotencyKey, argsHash };
+      const w = { id: sha(`${owner}:${address}`), ownerKey: owner, address, webhookUrl: a.webhookUrl ?? null, watchedUntil: new Date(now + a.ttlHours * 3_600_000).toISOString(), nextPollAt: new Date(now + 60_000 + stagger).toISOString(), agentId: c.agentId, idempotencyKey: a.idempotencyKey, argsHash };
       await svc.store.upsertWatch(w);
       return { data: { ...w, replayed: false, baseline: { score: r.verdict.score, label: r.verdict.label } }, brief: `Memantau ${(r.verdict.symbol ?? address).toUpperCase()} (skor awal ${r.verdict.score}, ${r.verdict.label}) selama ${a.ttlHours} jam.`, nextActions: checkActions([{ tool: 'verdict_token_history', reason: 'read the recorded timeline later', args: { address, hours: a.ttlHours } }]), ...scanEnvelope(r) };
     },
@@ -186,14 +194,19 @@ export const TOOL_DEFS = [
       const targets = a.contractTargets.map(normAddress);
       const tools = a.declaredTools.map((t) => ({ ...t, ...(t.contractTargets ? { contractTargets: t.contractTargets.map(normAddress) } : {}) }));
       const argsHash = sha({ url: a.url, tools, targets });
-      const prev = await svc.store.getEndpointByKey(a.idempotencyKey);
+      const owner = keyHash(c.apiKey!);
+      const prev = await svc.store.getEndpointByKey(owner, a.idempotencyKey);
       if (prev) {
         if (prev.argsHash !== argsHash) throw errors.idemConflict();
         return { data: { ...prev, replayed: true }, brief: `${prev.url} sudah terdaftar (trust ${prev.trust}); permintaan ulang tidak membuat entri baru.`, nextActions: checkActions([{ tool: 'verdict_registry_check', reason: 're-probe the endpoint', args: { idOrUrl: prev.id } }]), _meta: { confidence: null } };
       }
+      await svc.checkUrl(a.url);
       const existing = await svc.store.getEndpoint(a.url);
+      if (existing && existing.ownerKey !== owner) {
+        throw new VerdictError('ALREADY_REGISTERED', `${a.url} is registered by another key`, false, 'hanya pemilik yang bisa mengubah entri ini; pakai verdict_registry_check untuk membaca trust-nya', 409);
+      }
       const probe = await svc.probe(a.url);
-      const e: Endpoint = { id: existing?.id ?? `mcp_${sha(a.url).slice(0, 12)}`, url: a.url, declaredTools: tools, contractTargets: targets, registeredAt: existing?.registeredAt ?? svc.nowIso(), ownerAgentId: c.agentId, probe, trust: null, idempotencyKey: a.idempotencyKey, argsHash };
+      const e: Endpoint = { id: existing?.id ?? `mcp_${sha(a.url).slice(0, 12)}`, url: a.url, declaredTools: tools, contractTargets: targets, registeredAt: existing?.registeredAt ?? svc.nowIso(), ownerAgentId: c.agentId, ownerKey: owner, probe, trust: null, idempotencyKey: a.idempotencyKey, argsHash };
       const t = trustScore({ declaredTools: tools, contractTargets: targets, probe, registeredAt: e.registeredAt, now: svc.nowIso() });
       e.trust = t.trust;
       await svc.store.saveEndpoint(e);
@@ -219,6 +232,7 @@ export const TOOL_DEFS = [
     async run(a, _c, svc) {
       const e = await svc.store.getEndpoint(a.idOrUrl);
       if (!e) throw new VerdictError('NOT_FOUND', `no registered endpoint ${a.idOrUrl}`, false, 'panggil verdict_registry_search untuk id yang valid', 404);
+      await svc.checkUrl(e.url);
       const probe = await svc.probe(e.url);
       const t = trustScore({ declaredTools: e.declaredTools, contractTargets: e.contractTargets, probe, registeredAt: e.registeredAt, now: svc.nowIso() });
       const next = { ...e, probe, trust: t.trust };
@@ -259,6 +273,7 @@ export async function runTool(svc: VerdictService, name: string, raw: unknown, c
   const t = TOOL_MAP.get(name);
   let cost = 0;
   let address: string | null = null;
+  let authed = false;
   const fail = (e: unknown): ToolOutcome => {
     const ve = e instanceof VerdictError ? e : errors.internal();
     if (!(e instanceof VerdictError)) svc.log.error('tool_failed', { tool: name, agent_id: ctx.agentId, err: (e as Error)?.message });
@@ -275,14 +290,15 @@ export async function runTool(svc: VerdictService, name: string, raw: unknown, c
       throw errors.validation(msg);
     }
     const args = parsed.data as never;
+    authed = !!ctx.apiKey && (await svc.store.scopesFor(keyHash(ctx.apiKey))).length > 0;
     if (t.scope) {
-      const scopes = ctx.apiKey ? await svc.store.scopesFor(ctx.apiKey) : [];
+      const scopes = ctx.apiKey ? await svc.store.scopesFor(keyHash(ctx.apiKey)) : [];
       if (!scopes.includes(t.scope)) throw errors.scope(t.scope);
     }
     cost = t.cost(args);
     address = typeof (args as { address?: unknown }).address === 'string' ? String((args as { address: string }).address).toLowerCase() : null;
     if (cost > 0) {
-      const b = await svc.budget(ctx.agentId);
+      const b = await svc.budget(quotaKeyOf(ctx));
       if (b.remainingUnits < cost) throw errors.budget();
     }
     const out = await t.run(args, ctx, svc);
@@ -293,11 +309,11 @@ export async function runTool(svc: VerdictService, name: string, raw: unknown, c
       nextActions: checkActions(out.nextActions),
     };
     const durationMs = performance.now() - started;
-    await svc.store.recordCall({ agentId: ctx.agentId, tool: name, address, ts: svc.nowIso(), costUnits: cost, durationMs, ok: true });
+    await svc.store.recordCall({ agentId: ctx.agentId, quotaKey: quotaKeyOf(ctx), authenticated: authed, tool: name, address, ts: svc.nowIso(), costUnits: cost, durationMs, ok: true });
     svc.log.info('tool_call', { tool: name, agent_id: ctx.agentId, addr: address, duration_ms: Math.round(durationMs), costUnits: cost });
     return { ok: true, envelope };
   } catch (e) {
-    await svc.store.recordCall({ agentId: ctx.agentId, tool: name, address, ts: svc.nowIso(), costUnits: 0, durationMs: performance.now() - started, ok: false }).catch(() => {});
+    await svc.store.recordCall({ agentId: ctx.agentId, quotaKey: quotaKeyOf(ctx), authenticated: authed, tool: name, address, ts: svc.nowIso(), costUnits: 0, durationMs: performance.now() - started, ok: false }).catch(() => {});
     return fail(e);
   }
 }

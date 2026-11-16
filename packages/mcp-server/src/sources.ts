@@ -35,11 +35,13 @@ export function fixtureSource(now: () => string = () => new Date().toISOString()
 
 /** Real adapters in priority order, minus anything listed in DISABLE_SOURCES. */
 export function buildSources(cfg: Config): DataSource[] {
-  const all: DataSource[] = [
-    new DexScreenerSource({ baseUrl: cfg.DEX_BASE_URL, chainId: cfg.DEX_CHAIN_ID }),
-    new RpcSource({ ...(cfg.RPC_URL ? { url: cfg.RPC_URL } : {}), logRange: BigInt(cfg.RPC_LOG_RANGE) }),
-    new BasedBotSource({ ...(cfg.BASEDBOT_BASE_URL ? { baseUrl: cfg.BASEDBOT_BASE_URL } : {}), ...(cfg.BASEDBOT_LAUNCH_PATH ? { launchPath: cfg.BASEDBOT_LAUNCH_PATH } : {}), schemaVerified: cfg.BASEDBOT_SCHEMA_VERIFIED === '1' }),
-  ];
+  // An adapter without its config would only ever answer "not configured" and cost 0.2 confidence on
+  // every scan, so it is left out entirely; /v1/health lists what is active.
+  const all: DataSource[] = [new DexScreenerSource({ baseUrl: cfg.DEX_BASE_URL, chainId: cfg.DEX_CHAIN_ID })];
+  if (cfg.RPC_URL) all.push(new RpcSource({ url: cfg.RPC_URL, logRange: BigInt(cfg.RPC_LOG_RANGE) }));
+  if (cfg.BASEDBOT_BASE_URL && cfg.BASEDBOT_LAUNCH_PATH) {
+    all.push(new BasedBotSource({ baseUrl: cfg.BASEDBOT_BASE_URL, launchPath: cfg.BASEDBOT_LAUNCH_PATH, schemaVerified: cfg.BASEDBOT_SCHEMA_VERIFIED === '1' }));
+  }
   if (cfg.USE_MOCK_SOURCE === '1') all.unshift(fixtureSource());
   return all.filter((s) => !cfg.DISABLE_SOURCES.includes(s.name));
 }

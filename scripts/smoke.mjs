@@ -59,7 +59,7 @@ try {
   ok(page.includes('<table') && page.includes('PUMP_EXHAUSTED'), 'server-rendered page');
 } catch (e) { ok(false, `server 1: ${e.message}\n${s.err()}`); } finally { s.p.kill('SIGTERM'); await new Promise((r) => s.p.once('exit', r)); }
 
-// ── 2. real data: DexScreener live, RPC not configured, basedbot off ──
+// ── 2. real data: DexScreener live; RPC and BasedBot not configured, so holder signals are missing ──
 if (process.env.SMOKE_OFFLINE !== '1') {
   s = start({ DISABLE_SOURCES: 'basedbot' });
   try {
@@ -68,7 +68,7 @@ if (process.env.SMOKE_OFFLINE !== '1') {
     const b = await r.json();
     if (r.status === 200) {
       ok(envelopeOk(b) && b.data.score !== null, `real scan ${REAL}: ${b.data.symbol} score ${b.data.score} (${b.data.label}), confidence ${b.data.confidence}`);
-      ok(b._meta.degraded === true, 'real scan is marked degraded (RPC not configured, basedbot off)');
+      ok(b.data.confidence < 1 && b.data.missingSignals.includes('top10_share'), `real scan reports what it could not see: ${b.data.missingSignals.join(', ')}`);
       console.log(`      brief: ${b.brief}`);
     } else {
       ok(b.error && b.error.retryable !== undefined, `real scan returned a structured error ${b.error?.code} (network?)`);
