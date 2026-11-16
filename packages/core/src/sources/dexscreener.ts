@@ -25,7 +25,7 @@ export class DexScreenerSource implements DataSource {
         if (!res.ok) throw new Error(`dexscreener ${res.status}`);
         return (await res.json()) as unknown;
       }, { retries: 2, ...this.opts.retry });
-      const out = parseDexScreener(body, address, this.opts.chainId ?? 'base');
+      const out = parseDexScreener(body, address, this.opts.chainId ?? 'robinhood');
       if (!out) return incomplete(this.name, 'no pair for this token on the configured chain');
       const r: SourceResult<MarketData> = { data: out, fetchedAt: nowIso(), source: this.name, complete: true };
       this.last.set(address, r);
@@ -63,7 +63,8 @@ export function parseDexScreener(body: unknown, address: string, chainId: string
   return {
     symbol: typeof p.baseToken?.symbol === 'string' ? p.baseToken.symbol : null,
     name: typeof p.baseToken?.name === 'string' ? p.baseToken.name : null,
-    pairAddress: typeof p.pairAddress === 'string' ? p.pairAddress.toLowerCase() : null,
+    // Uniswap v4 identifies pools by a 32-byte id, not an address; only 20-byte pair addresses are usable as holders
+    pairAddress: typeof p.pairAddress === 'string' && /^0x[0-9a-fA-F]{40}$/.test(p.pairAddress) ? p.pairAddress.toLowerCase() : null,
     priceUsd: num(p.priceUsd),
     mcUsd: mc,
     liqUsd: liq,

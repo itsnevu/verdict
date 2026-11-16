@@ -12,8 +12,8 @@ const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { sta
 const dexBody = {
   pairs: [
     { chainId: 'ethereum', baseToken: { address: TOKEN }, liquidity: { usd: 9e9 }, marketCap: 1 },
-    { chainId: 'base', pairAddress: PAIR, baseToken: { address: TOKEN.toUpperCase().replace('0X', '0x'), symbol: 'RUSHR', name: 'Rushr' }, priceUsd: '0.0004', marketCap: 400000, liquidity: { usd: 140000 }, volume: { h6: 400000, h24: 1200000 }, txns: { h24: { buys: 2600, sells: 2400 } }, pairCreatedAt: 1763078400000 },
-    { chainId: 'base', baseToken: { address: TOKEN }, liquidity: { usd: 10 }, marketCap: 400000 },
+    { chainId: 'robinhood', pairAddress: PAIR, baseToken: { address: TOKEN.toUpperCase().replace('0X', '0x'), symbol: 'RUSHR', name: 'Rushr' }, priceUsd: '0.0004', marketCap: 400000, liquidity: { usd: 140000 }, volume: { h6: 400000, h24: 1200000 }, txns: { h24: { buys: 2600, sells: 2400 } }, pairCreatedAt: 1763078400000 },
+    { chainId: 'robinhood', baseToken: { address: TOKEN }, liquidity: { usd: 10 }, marketCap: 400000 },
   ],
 };
 
@@ -32,13 +32,16 @@ describe('withRetry', () => {
 
 describe('DexScreenerSource', () => {
   it('picks the deepest pair on the configured chain', () => {
-    const m = parseDexScreener(dexBody, TOKEN, 'base')!;
+    const m = parseDexScreener(dexBody, TOKEN, 'robinhood')!;
     expect(m.liqUsd).toBe(140000);
     expect(m.pairAddress).toBe(PAIR);
     expect(m.tx24h).toBe(5000);
     expect(m.uniqueWallets24h).toBeNull();
-    expect(parseDexScreener({ pairs: 'nope' }, TOKEN, 'base')).toBeNull();
+    expect(parseDexScreener({ pairs: 'nope' }, TOKEN, 'robinhood')).toBeNull();
+    const v4 = { pairs: [{ ...dexBody.pairs[1], pairAddress: '0x' + 'ab'.repeat(32) }] };
+    expect(parseDexScreener(v4, TOKEN, 'robinhood')!.pairAddress).toBeNull();
     expect(parseDexScreener(dexBody, TOKEN, 'solana')).toBeNull();
+    expect(parseDexScreener(dexBody, TOKEN, 'base')).toBeNull();
   });
   it('serves the last snapshot as degraded when rate limited', async () => {
     let calls = 0;
@@ -91,15 +94,16 @@ describe('RpcSource', () => {
       if (functionName === 'totalSupply') return 1000n;
       return ({ [holder(1)]: 400n, [holder(2)]: 100n, [holder(9)]: 50n } as Record<string, bigint>)[args![0]!] ?? 0n;
     },
-    getCode: async () => '0x60',
+    // holder(2) is a contract (think: a pool) and must be excluded from the top-10
+    getCode: async ({ address }: { address?: string } = {}) => (address === holder(2) || address === TOKEN ? '0x60' : '0x'),
   };
   const rpc = new RpcSource({ client: client as never, logRange: 20_000n, chunk: 10_000n });
 
   it('reconstructs holders from Transfer logs, excluding the pool', async () => {
     const r = await rpc.getHolders(TOKEN, { pairAddress: PAIR, devAddress: holder(9) });
     expect(r.complete).toBe(false);
-    expect(r.data).toMatchObject({ top10Share: 0.5, devShare: 0.05, holderCount: 2, approximate: true });
-    expect((await rpc.getHolders(TOKEN, { pairAddress: PAIR })).data?.top10Share).toBe(0.5); // cached
+    expect(r.data).toMatchObject({ top10Share: 0.4, devShare: 0.05, holderCount: 1, approximate: true });
+    expect((await rpc.getHolders(TOKEN, { pairAddress: PAIR })).data?.top10Share).toBe(0.4); // cached
   });
   it('lists early buyers from the pair and reports what plain RPC cannot do', async () => {
     const e = await rpc.getEarlyBuyers(TOKEN, { pairAddress: PAIR });
@@ -115,7 +119,7 @@ describe('RpcSource', () => {
 describe('collectInputs', () => {
   const mock = new MockSource('mock', {}, () => '2026-11-16T12:00:00.000Z');
   mock.set(TOKEN, {
-    market: parseDexScreener(dexBody, TOKEN, 'base'),
+    market: parseDexScreener(dexBody, TOKEN, 'robinhood'),
     holders: { top10Share: 0.2, devShare: 0.02, holderCount: 100, holderCount24hAgo: 90 },
     earlyBuyers: { buys: Array.from({ length: 12 }, (_, k) => ({ wallet: `0xb${k}`, amountUsd: 100 + k * 13, fundingSource: null })) },
     contract: { honeypot: false, sellFails: false, lpLocked: true },
@@ -173,5 +177,14 @@ describe('registry trust', () => {
     expect(sse).toMatchObject({ tlsValid: false, liveTools: ['b'] });
     const bad = await probeMcp('https://x.test/mcp', async () => { throw new Error('self signed certificate'); });
     expect(bad.error).toMatch(/^tls:/);
+  });
+});
+
+describe('shortError', () => {
+  it('keeps upstream errors to one readable line', async () => {
+    const { shortError } = await import('@verdictagent/core');
+    const viem = 'Invalid parameters were provided to the RPC method.\nDouble check you have provided the correct parameters.\n\nStatus: 403\nURL: https://x\nRequest body: {"method":"eth_getLogs"}\n\nDetails: Archive requests require a personal token.\nVersion: viem@2';
+    expect(shortError(viem)).toBe('Invalid parameters were provided to the RPC method. (Archive requests require a personal token.)');
+    expect(shortError('x'.repeat(500))).toHaveLength(200);
   });
 });

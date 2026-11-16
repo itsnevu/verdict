@@ -32,7 +32,7 @@ export class RpcSource implements DataSource {
     const c = this.client!;
     const latest = await withRetry(() => c.getBlockNumber());
     const range = this.o.logRange ?? 20_000n;
-    const chunk = this.o.chunk ?? 5_000n;
+    const chunk = this.o.chunk ?? 50_000n;
     const start = latest > range ? latest - range : 0n;
     const out: { from: string; to: string; value: bigint; block: bigint }[] = [];
     for (let b = start; b <= latest; b += chunk) {
@@ -58,7 +58,12 @@ export class RpcSource implements DataSource {
       const exclude = new Set([...BURN, address, ctx.pairAddress?.toLowerCase() ?? '']);
       const cands = [...received.entries()].filter(([a]) => !exclude.has(a)).sort((a, b) => (b[1] > a[1] ? 1 : -1)).slice(0, this.o.maxCandidates ?? 60).map(([a]) => a);
       const balances = await Promise.all(cands.map((a) => withRetry(() => c.readContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [a as `0x${string}`] }))));
-      const held = balances.map((b, i) => ({ a: cands[i]!, b })).filter((x) => x.b > 0n).sort((x, y) => (y.b > x.b ? 1 : -1));
+      const nonZero = balances.map((b, i) => ({ a: cands[i]!, b })).filter((x) => x.b > 0n).sort((x, y) => (y.b > x.b ? 1 : -1));
+      // pools, the v4 PoolManager, routers and lockers are contracts: exclude contract holders from the top of the list
+      const top = nonZero.slice(0, 25);
+      const codes = await Promise.all(top.map((x) => withRetry(() => c.getCode({ address: x.a as `0x${string}` })).catch(() => '0x')));
+      const isContract = new Set(top.filter((_, i) => codes[i] && codes[i] !== '0x').map((x) => x.a));
+      const held = nonZero.filter((x) => !isContract.has(x.a));
       const share = (v: bigint) => Number((v * 1_000_000n) / supply) / 1_000_000;
       const top10 = held.slice(0, 10).reduce((s, x) => s + x.b, 0n);
       let devShare: number | null = null;

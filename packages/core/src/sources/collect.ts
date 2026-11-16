@@ -14,7 +14,7 @@ export async function collectInputs(address: string, sources: DataSource[], now:
     for (const s of sources.filter((x) => supports(x, m))) {
       let r: SourceResult<T>;
       try { r = await run(s); } catch (e) { r = { data: null, fetchedAt: now(), source: s.name, complete: false, error: (e as Error).message }; }
-      statuses.push({ name: s.name, method: m, fetchedAt: r.fetchedAt, complete: r.complete, ...(r.error ? { error: r.error } : {}) });
+      statuses.push({ name: s.name, method: m, fetchedAt: r.fetchedAt, complete: r.complete, ...(r.error ? { error: shortError(r.error) } : {}) });
       if (r.complete && r.data !== null) return r;
       if (!partial && r.data !== null) partial = r;
     }
@@ -73,4 +73,13 @@ export function sizeVariance(e: EarlyBuyerData | null): number | null {
   const mean = v.reduce((a, b) => a + b, 0) / v.length;
   const sd = Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / v.length);
   return mean === 0 ? null : sd / mean;
+}
+
+/** Upstream errors (e.g. viem) can be many lines with request bodies; keep the first meaningful line. */
+export function shortError(e: string): string {
+  const lines = e.split('\n').map((l) => l.trim()).filter(Boolean);
+  const detail = lines.find((l) => l.startsWith('Details:'))?.slice(8).trim();
+  const first = lines[0] ?? e;
+  const out = detail ? `${first} (${detail})` : first;
+  return out.length > 200 ? `${out.slice(0, 197)}...` : out;
 }
