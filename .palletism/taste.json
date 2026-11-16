@@ -1,0 +1,12 @@
+{
+  "pack": "halftone-press",
+  "colors": {
+    "ground": "#F1ECE3",
+    "ink": "#0E0C0A",
+    "accent": "#FF3B12",
+    "accent2": "#1B32E8",
+    "support": "#E6DFD2"
+  },
+  "why": "Chosen by the user over Pop Grain: two-ink offset print on pale paper matches VERDICT's printed, technical paper look, and press-blue + press-red map directly onto VERDICT cobalt #1B32E8 and vermilion #FF3B12.",
+  "runnersUp": ["pop-grain", "graphite-sketch"]
+}

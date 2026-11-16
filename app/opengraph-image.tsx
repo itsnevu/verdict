@@ -1,0 +1,39 @@
+import { ImageResponse } from 'next/og';
+
+export const alt = 'VERDICT: onchain powers for your agent';
+export const size = { width: 1200, height: 630 };
+export const contentType = 'image/png';
+// rendered on request: prerendering next/og at build time fails on Windows (font URL resolution)
+export const runtime = 'edge';
+
+async function spaceGrotesk(): Promise<ArrayBuffer | null> {
+  try {
+    const css = await (await fetch('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700', { headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/533.21 (KHTML, like Gecko) Version/5.0 Safari/533.21' } })).text();
+    const url = css.match(/src: url\((.+?)\) format\('(?:truetype|opentype)'\)/)?.[1];
+    return url ? await (await fetch(url)).arrayBuffer() : null;
+  } catch {
+    return null;
+  }
+}
+
+export default async function OgImage() {
+  const font = await spaceGrotesk();
+  return new ImageResponse(
+    (
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: '#F1ECE3', color: '#0E0C0A', padding: 72, fontFamily: 'Space Grotesk' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, fontSize: 40, fontWeight: 800 }}>
+          <div style={{ width: 56, height: 56, background: '#0E0C0A', display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+            <div style={{ width: 16, height: 16, background: '#FF3B12' }} />
+          </div>
+          VERDICT
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', fontSize: 112, fontWeight: 800, letterSpacing: -4, lineHeight: 0.95 }}>
+          <span>Onchain powers</span>
+          <span style={{ display: 'flex' }}>for your agent<span style={{ color: '#FF3B12' }}>.</span></span>
+        </div>
+        <div style={{ display: 'flex', fontSize: 28, color: '#57503F' }}>MCP for Claude Code and Codex · every onchain action gets a verdict first</div>
+      </div>
+    ),
+    { ...size, ...(font ? { fonts: [{ name: 'Space Grotesk', data: font, weight: 700 as const, style: 'normal' as const }] } : {}) },
+  );
+}

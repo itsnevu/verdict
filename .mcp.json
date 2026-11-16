@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "palletism": {
+      "type": "http",
+      "url": "https://palletism.art/mcp",
+      "headers": {
+        "Authorization": "Bearer ${PALLETISM_KEY}"
+      }
+    }
+  }
+}
