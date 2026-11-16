@@ -13,7 +13,7 @@
 | 9 | Fase 9: halaman server-rendered, Dockerfile multi-stage non-root + healthcheck, docker-compose (api, worker, postgres, redis), `.env.example`, README + Asumsi, `scripts/smoke.mjs` (14 cek end-to-end termasuk 1 scan DexScreener nyata), REPORT.md | selesai | 72/72 hijau, coverage score 99.2% / mcp 100%, smoke lulus |
 
 | 10 | Verifikasi Docker: `docker compose up -d --build` bersih (api healthy, postgres, redis, worker), `/v1/health` ok, migrasi 0000+0001 terpasang di Postgres, seed → leaderboard aktif + registry dari Postgres, scan nyata DEGEN dengan `DISABLE_SOURCES=basedbot` → `degraded: true`, MCP tools/list 11 + tools/call, watch idempoten di Postgres, worker mem-poll watch tiap 60s, SIGTERM → shutdown rapi, `docker compose down` bersih | selesai | 72/72 hijau |
-| 11 | Audit kesiapan mainnet: SSRF guard, watch & registry per pemilik (migrasi 0002), kuota/leaderboard per key/IP, API key di-hash + tolak key demo di produksi, TRUST_PROXY_HOPS, adapter tanpa konfigurasi tidak dipasang, seed menolak produksi, compare tidak menagih duplikat, nextActions tanpa alamat contoh, landing tanpa data palsu. Diverifikasi di compose produksi | sisa audit: poin 13-15 (performa) | 85/85 hijau, smoke lulus |
+| 11 | Audit kesiapan mainnet: SSRF guard, watch & registry per pemilik (migrasi 0002), kuota/leaderboard per key/IP, API key di-hash + tolak key demo di produksi, TRUST_PROXY_HOPS, adapter tanpa konfigurasi tidak dipasang, seed menolak produksi, compare tidak menagih duplikat, nextActions tanpa alamat contoh, landing tanpa data palsu. Diverifikasi di compose produksi | sisa audit: poin 13-15 (performa) | 82/82 hijau, smoke lulus |
 
 ## Blokir
 

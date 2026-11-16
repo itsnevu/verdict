@@ -51,7 +51,7 @@ pnpm smoke                                                     # verifikasi end-
 
 | cek | hasil |
 |---|---|
-| `pnpm test --coverage` | 85/85 test hijau (6 file) |
+| `pnpm test --coverage` | 82/82 test hijau (6 file) |
 | coverage `core/src/score` | lines 99.2% · branches 93.8% · functions 100% |
 | coverage `mcp-server/src/mcp` | lines 100% · branches 86.1% · functions 97.0% |
 | `pnpm typecheck` | bersih (tsc strict, noUnused*, noUncheckedIndexedAccess) |
