@@ -35,10 +35,19 @@ export class RpcSource implements DataSource {
     const chunk = this.o.chunk ?? 50_000n;
     const start = latest > range ? latest - range : 0n;
     const out: { from: string; to: string; value: bigint; block: bigint }[] = [];
-    for (let b = start; b <= latest; b += chunk) {
-      const to = b + chunk - 1n > latest ? latest : b + chunk - 1n;
-      const page = await withRetry(() => c.getLogs({ address: token, event: TRANSFER, args, fromBlock: b, toBlock: to }));
-      for (const l of page) out.push({ from: String(l.args.from).toLowerCase(), to: String(l.args.to).toLowerCase(), value: l.args.value ?? 0n, block: l.blockNumber ?? 0n });
+    const ranges: [bigint, bigint][] = [];
+    for (let b = start; b <= latest; b += chunk) ranges.push([b, b + chunk - 1n > latest ? latest : b + chunk - 1n]);
+    // fetch up to 4 ranges at a time, then keep block order
+    const pages: Awaited<ReturnType<typeof c.getLogs>>[] = new Array(ranges.length);
+    for (let i = 0; i < ranges.length; i += 4) {
+      const batch = ranges.slice(i, i + 4);
+      const got = await Promise.all(batch.map(([from, to]) => withRetry(() => c.getLogs({ address: token, event: TRANSFER, args, fromBlock: from, toBlock: to }))));
+      got.forEach((p, j) => { pages[i + j] = p; });
+    }
+    for (const page of pages) {
+      for (const l of page as { args: { from?: string; to?: string; value?: bigint }; blockNumber: bigint | null }[]) {
+        out.push({ from: String(l.args.from).toLowerCase(), to: String(l.args.to).toLowerCase(), value: l.args.value ?? 0n, block: l.blockNumber ?? 0n });
+      }
     }
     return out;
   }
