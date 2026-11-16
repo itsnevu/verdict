@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "VERDICT: token verdicts on DexScreener and Uniswap",
+  "short_name": "VERDICT",
+  "version": "0.1.0",
+  "description": "Shows the VERDICT score, label and reasons for the token you are looking at on DexScreener and Uniswap.",
+  "action": {
+    "default_title": "VERDICT",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.dexscreener.com/*",
+    "https://verdictagent.xyz/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://dexscreener.com/*",
+        "https://app.uniswap.org/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

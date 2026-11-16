@@ -46,7 +46,7 @@ try {
   const init = await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'smoke', version: '1' } } });
   ok(init.result?.serverInfo?.name === 'verdictagent', 'MCP initialize');
   const list = await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
-  ok(list.result?.tools?.length === 22, `MCP tools/list → ${list.result?.tools?.length} tools`);
+  ok(list.result?.tools?.length === 31, `MCP tools/list → ${list.result?.tools?.length} tools`);
   const call = await rpc({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'verdict_scan_token', arguments: { address: FIX } } }, { 'x-agent-id': 'smoke-agent' });
   ok(envelopeOk(call.result?.structuredContent), 'MCP tools/call returns a valid envelope');
   ok(call.result?.structuredContent?.data?.flags?.includes('PUMP_EXHAUSTED'), 'fixture ZOLVA → PUMP_EXHAUSTED');

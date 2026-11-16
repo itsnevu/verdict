@@ -59,14 +59,14 @@ export class PgStore implements Store {
   }
 
   private watch(r: typeof t.watches.$inferSelect): Watch {
-    return { id: r.id, address: r.addr, ownerKey: r.ownerKey, agentId: r.agentId, webhookUrl: r.webhookUrl, watchedUntil: iso(r.watchedUntil)!, nextPollAt: iso(r.nextPollAt)!, idempotencyKey: r.idemKey, argsHash: r.argsHash };
+    return { id: r.id, address: r.addr, ownerKey: r.ownerKey, agentId: r.agentId, webhookUrl: r.webhookUrl, watchedUntil: iso(r.watchedUntil)!, nextPollAt: iso(r.nextPollAt)!, idempotencyKey: r.idemKey, argsHash: r.argsHash, stopLossBelow: r.stopLossBelow ?? null };
   }
   async getWatchByKey(owner: string, k: string) {
     const [r] = await this.db.select().from(t.watches).where(and(eq(t.watches.ownerKey, owner), eq(t.watches.idemKey, k))).limit(1);
     return r ? this.watch(r) : null;
   }
   async upsertWatch(w: Watch) {
-    const v = { id: w.id, addr: w.address, ownerKey: w.ownerKey, agentId: w.agentId, webhookUrl: w.webhookUrl, watchedUntil: w.watchedUntil, nextPollAt: w.nextPollAt, idemKey: w.idempotencyKey, argsHash: w.argsHash };
+    const v = { id: w.id, addr: w.address, ownerKey: w.ownerKey, agentId: w.agentId, webhookUrl: w.webhookUrl, watchedUntil: w.watchedUntil, nextPollAt: w.nextPollAt, idemKey: w.idempotencyKey, argsHash: w.argsHash, stopLossBelow: w.stopLossBelow ?? null };
     await this.db.insert(t.watches).values(v).onConflictDoUpdate({ target: t.watches.id, set: v });
   }
   async dueWatches(nowIso: string, limit: number) {

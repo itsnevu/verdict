@@ -75,7 +75,7 @@ export const chapters = [
 ];
 
 export const facts = [
-  { k: '22', v: 'MCP tools' },
+  { k: '31', v: 'MCP tools' },
   { k: 'Y / N', v: 'you approve' },
   { k: '0', v: 'funds held' },
   { k: '9', v: 'signals per verdict' },
@@ -257,7 +257,7 @@ export const installTabs = {
   'Codex': 'codex mcp add verdict --url https://verdictagent.xyz/mcp --bearer-token-env-var VERDICT_KEY',
 } as Record<string, string>;
 
-export const installSteps = ['Get a key from your dashboard. It is shown once.', 'Run the line for your agent, in your project folder.', 'Ask your agent: "list the verdict tools". You should see 22.'];
+export const installSteps = ['Get a key from your dashboard. It is shown once.', 'Run the line for your agent, in your project folder.', 'Ask your agent: "list the verdict tools". You should see 31.'];
 
 export const footer = {
   tagline: 'An onchain agent that stops at your key.',
@@ -282,28 +282,28 @@ export const capabilities = {
       { t: 'Compare and rank tokens', live: true },
       { t: 'Alert when a token decays', live: true },
       { t: 'Spot hidden taxes, blacklists, mint', live: true },
-      { t: 'Detect wash trading and fake volume', live: false },
-      { t: 'Warn before LP unlocks', live: false },
+      { t: 'Detect wash trading and fake volume', live: true },
+      { t: 'Check if liquidity can be pulled', live: true },
       { t: 'Score a whole wallet', live: true },
     ] },
     { h: 'Inspect', items: [
       { t: 'Check what a wallet holds', live: true },
       { t: 'Decode any tx hash, any EVM chain', live: true },
-      { t: 'Deployer history by wallet address', live: false },
+      { t: 'Deployer history by wallet address', live: true },
       { t: 'Read a contract: owner, mint, pause, proxy', live: true },
       { t: 'Flag cloned contracts', live: true },
-      { t: 'Trace where a wallet got its funds', live: false },
-      { t: 'Label CEX, bridge, mixer, known scam', live: false },
-      { t: 'Track whale and dev wallets', live: false },
-      { t: 'Wallet PnL: trader or bot', live: false },
+      { t: 'Trace where a wallet got its funds', live: true },
+      { t: 'Label CEX, bridge, mixer, known scam', live: true },
+      { t: 'Track whale and dev wallets', live: true },
+      { t: 'Wallet PnL: trader or bot', live: true },
     ] },
     { h: 'Act', items: [
       { t: 'Find risky approvals in your wallet', live: true },
       { t: 'Revoke them in one batch', live: true },
-      { t: 'Prepare swaps, approvals, deploys', live: false },
+      { t: 'Prepare swaps you sign yourself', live: true },
       { t: 'Simulate before you sign', live: true },
-      { t: 'Bridge with a verdict on both sides', live: false },
-      { t: 'Stop-loss when a token turns DECAYING', live: false },
+      { t: 'Bridge with a verdict on both sides', live: true },
+      { t: 'Stop-loss alert with a prepared exit', live: true },
       { t: 'Lint Solidity before deploy', live: true },
       { t: 'Enforce your rules in VERDICT.md', live: true },
       { t: 'Kill switch: revoke everything', live: true },
@@ -320,7 +320,7 @@ export const capabilities = {
       { t: 'MCP for Claude Code, Codex, any agent', live: true },
       { t: 'HTTP API and SDK', live: true },
       { t: 'Telegram and Discord alerts', live: true },
-      { t: 'Browser extension on DexScreener and Uniswap', live: false },
+      { t: 'Browser extension on DexScreener and Uniswap', live: true },
     ] },
   ],
 };
@@ -371,7 +371,7 @@ export const connect = {
   steps: [
     { t: 'get a key', d: 'make one on your dashboard. it is shown once.' },
     { t: 'add it to your agent', d: 'pick your agent and copy the command.' },
-    { t: 'check it works', d: 'start a new session and ask: "list the verdict tools". you should see 22.' },
+    { t: 'check it works', d: 'start a new session and ask: "list the verdict tools". you should see 31.' },
   ],
   readOnly: 'No key? Read-only tools work without one: scan, compare, explain, history.',
 };

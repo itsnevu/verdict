@@ -159,12 +159,12 @@ export const TOOL_DEFS = [
     description:
       'Monitor a token and get alerted (optional webhook) when it decays: score drops >20 in 1h, PUMP_EXHAUSTED appears, dev share rises >10 points, or liquidity falls >40% in 1h. ' +
       'Use instead of polling verdict_scan_token. Requires scope "watch" and an idempotencyKey. Cost: 1 unit.',
-    input: z.object({ address: addr, webhookUrl: z.string().url().optional(), ttlHours: z.number().int().min(1).max(168).default(24), idempotencyKey: idem }),
+    input: z.object({ address: addr, webhookUrl: z.string().url().optional(), ttlHours: z.number().int().min(1).max(168).default(24), stopLossBelow: z.number().int().min(1).max(100).optional().describe('also alert, with a prepared exit swap link, when the score falls below this'), idempotencyKey: idem }),
     cost: () => TOOLS.verdict_watch_token.cost,
     scope: 'watch',
     async run(a, c, svc) {
       const address = normAddress(a.address);
-      const argsHash = sha({ address, webhookUrl: a.webhookUrl ?? null, ttlHours: a.ttlHours });
+      const argsHash = sha({ address, webhookUrl: a.webhookUrl ?? null, ttlHours: a.ttlHours, stopLossBelow: a.stopLossBelow ?? null });
       const owner = keyHash(c.apiKey!);
       const prev = await svc.store.getWatchByKey(owner, a.idempotencyKey);
       if (prev) {
@@ -175,7 +175,7 @@ export const TOOL_DEFS = [
       const r = await svc.scan(address);
       const now = svc.now().getTime();
       const stagger = parseInt(sha(address).slice(0, 6), 16) % 60_000;
-      const w = { id: sha(`${owner}:${address}`), ownerKey: owner, address, webhookUrl: a.webhookUrl ?? null, watchedUntil: new Date(now + a.ttlHours * 3_600_000).toISOString(), nextPollAt: new Date(now + 60_000 + stagger).toISOString(), agentId: c.agentId, idempotencyKey: a.idempotencyKey, argsHash };
+      const w = { id: sha(`${owner}:${address}`), ownerKey: owner, address, webhookUrl: a.webhookUrl ?? null, watchedUntil: new Date(now + a.ttlHours * 3_600_000).toISOString(), nextPollAt: new Date(now + 60_000 + stagger).toISOString(), agentId: c.agentId, idempotencyKey: a.idempotencyKey, argsHash, stopLossBelow: a.stopLossBelow ?? null };
       await svc.store.upsertWatch(w);
       return { data: { ...w, replayed: false, baseline: { score: r.verdict.score, label: r.verdict.label } }, brief: `Memantau ${(r.verdict.symbol ?? address).toUpperCase()} (skor awal ${r.verdict.score}, ${r.verdict.label}) selama ${a.ttlHours} jam.`, nextActions: checkActions([{ tool: 'verdict_token_history', reason: 'read the recorded timeline later', args: { address, hours: a.ttlHours } }]), ...scanEnvelope(r) };
     },

@@ -130,7 +130,7 @@ function Works() {
   );
 }
 
-const TOOLS = ['scan_token', 'agent_brief', 'list_runners', 'token_history', 'explain_score', 'compare_tokens', 'budget', 'watch_token', 'attest_token', 'register_mcp', 'registry_search', 'registry_check', 'read_contract', 'decode_tx', 'wallet_holdings', 'wallet_score', 'wallet_approvals', 'prepare_revoke', 'simulate_tx', 'lint_solidity', 'check_policy', 'track_record'];
+const TOOLS = ['scan_token', 'agent_brief', 'list_runners', 'token_history', 'explain_score', 'compare_tokens', 'budget', 'watch_token', 'attest_token', 'register_mcp', 'registry_search', 'registry_check', 'read_contract', 'decode_tx', 'wallet_holdings', 'wallet_score', 'wallet_approvals', 'prepare_revoke', 'simulate_tx', 'lint_solidity', 'check_policy', 'track_record', 'wash_check', 'lp_status', 'deployer_history', 'trace_funding', 'label_address', 'wallet_moves', 'wallet_pnl', 'prepare_swap', 'bridge_check'];
 
 export default function Toolkit() {
   return (
@@ -145,7 +145,7 @@ export default function Toolkit() {
         <Explain /><Rules />
         <Watch /><Works />
         <article className="card tk s12 tk-tools" data-reveal>
-          <header className="tk-h"><span className="mono dim">07</span><h3>22 MCP tools, built and tested</h3>
+          <header className="tk-h"><span className="mono dim">07</span><h3>31 MCP tools, built and tested</h3>
             <span className="verified mono"><ShieldCheck size={14} aria-hidden /> tested</span></header>
           <ul className="tools mono">{TOOLS.map((t, i) => <li key={t}><span className="dim">{String(i + 1).padStart(2, '0')}</span> verdict_{t}</li>)}</ul>
         </article>

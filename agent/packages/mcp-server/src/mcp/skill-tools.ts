@@ -7,6 +7,8 @@ import { checkPolicy, parsePolicy } from '../skills/policy.js';
 import { trackRecord } from '../skills/report.js';
 import { decodeTx, simulateTx } from '../skills/tx.js';
 import { prepareRevokes, walletApprovals, walletHoldings } from '../skills/wallet.js';
+import { BRIDGE_URL, bridgeSides, deployerHistory, dexPairs, findDeployer, labelAddress, lpStatus, traceFunding, uniswapLink, walletMoves, walletPnl, washCheck, KNOWN_LABELS } from '../skills/deep.js';
+import { checkPolicy as checkPol, parsePolicy as parsePol } from '../skills/policy.js';
 import type { CallCtx } from './tools.js';
 
 type Out = Omit<Envelope<unknown>, '_meta'> & { _meta?: Partial<Envelope<unknown>['_meta']> };
@@ -169,6 +171,139 @@ export const SKILL_DEFS = [
       return { data: r, brief: r.verdictsChecked ? `${r.accuracy}% of ${r.verdictsChecked} verdicts held after ${a.horizonDays} days.` : `Not enough verdicts older than ${a.horizonDays} days yet.`, nextActions: [], _meta: noMeta };
     },
   }),
+  def({
+    name: 'verdict_wash_check',
+    description: 'Detect wash trading and fake volume: volume many times liquidity, perfectly balanced buys and sells, heavy volume with no price movement, bot-sized trades, and wallets bouncing the token back and forth onchain. Use before trusting a token\'s volume. Cost: 1 unit.',
+    input: z.object({ address: addr, chain }),
+    cost: () => TOOLS.verdict_wash_check.cost,
+    async run(a, _c, svc) {
+      const { info, c } = client(svc, a.chain);
+      const r = await washCheck(c, asHex(a.address), info.key, { range: svc.walletRange / 4n, dex: svc.dex });
+      return { data: { chain: info.key, address: a.address.toLowerCase(), ...r }, brief: `Wash trading ${r.washTrading} (${r.score}/100)${r.signals.length ? `: ${r.signals.slice(0, 2).join('; ')}` : ''}.`, nextActions: [], _meta: noMeta };
+    },
+  }),
+  def({
+    name: 'verdict_lp_status',
+    description: 'Can the liquidity be pulled? Finds the deepest pool and reports who holds the LP: burned, held by contracts (possible lockers) or by plain wallets (can rug any time). For Uniswap v3/v4 it explains that positions are NFTs and cannot be locked like LP tokens. Cost: 1 unit.',
+    input: z.object({ address: addr, chain }),
+    cost: () => TOOLS.verdict_lp_status.cost,
+    async run(a, _c, svc) {
+      const { info, c } = client(svc, a.chain);
+      const r = await lpStatus(c, asHex(a.address), info.key, { range: svc.walletRange, dex: svc.dex });
+      return { data: { chain: info.key, address: a.address.toLowerCase(), ...r }, brief: `LP ${r.status}${'risk' in r && r.risk ? ` (${r.risk} risk)` : ''}: ${r.detail}`, nextActions: [], _meta: noMeta };
+    },
+  }),
+  def({
+    name: 'verdict_deployer_history',
+    description: 'Everything a deployer has launched before. Pass a wallet, or a token (its launcher is found from the first mint). Lists contracts created from that wallet, judges each token, and flags serial ruggers. Cost: 1 unit plus scans.',
+    input: z.object({ address: addr, chain, judge: z.boolean().default(true) }),
+    cost: () => TOOLS.verdict_deployer_history.cost,
+    async run(a, _c, svc) {
+      const { info, c } = client(svc, a.chain);
+      let wallet = asHex(a.address);
+      let deployedBy: Record<string, unknown> | null = null;
+      const code = await c.getCode({ address: wallet }).catch(() => '0x');
+      if (code && code !== '0x') {
+        const d = await findDeployer(svc.chains.wideLogs(info.key), wallet).catch(() => null);
+        if (!d?.deployer) throw new VerdictError('DEPLOYER_UNKNOWN', 'could not find the first mint of this token', true, 'pass the deployer wallet directly', 422);
+        deployedBy = { token: wallet, ...d };
+        wallet = d.deployer as `0x${string}`;
+      }
+      const h = await deployerHistory(c, wallet);
+      const tokens = h.contracts.filter((x) => x.isToken).slice(0, 10);
+      const judged = a.judge && info.key === 'robinhood' ? await Promise.all(tokens.map(async (t) => {
+        try { const r = await svc.scan(t.address); return { ...t, score: r.verdict.score, label: r.verdict.label }; } catch { return { ...t, score: null, label: 'no market' }; }
+      })) : tokens;
+      const dead = judged.filter((t) => 'label' in t && (t.label === 'DEAD' || t.label === 'COLLAPSING' || t.label === 'no market')).length;
+      const serial = tokens.length >= 3 && dead / tokens.length >= 0.6;
+      return {
+        data: { chain: info.key, deployedBy, ...h, tokens: judged, serialRugger: serial },
+        brief: `Deployer ${wallet.slice(0, 10)}… created ${h.contracts.length} contract(s), ${tokens.length} token(s)${tokens.length ? `; ${dead} dead, collapsing or never traded` : ''}${serial ? '. Pattern matches a serial launcher.' : '.'}`,
+        nextActions: checkActions([{ tool: 'verdict_trace_funding', reason: 'see who funded this deployer', args: { wallet } }]), _meta: noMeta,
+      };
+    },
+  }),
+  def({
+    name: 'verdict_trace_funding',
+    description: 'Where did a wallet get its money? Lists the first wallets and contracts that sent it tokens in the recent window, labelled (CEX, mixer, bridge, mint) where known. Mixer funding is a strong rug signal. Native ETH funding needs a tracing node and is not covered. Cost: 1 unit.',
+    input: z.object({ wallet: addr, chain }),
+    cost: () => TOOLS.verdict_trace_funding.cost,
+    async run(a, _c, svc) {
+      const { info, c } = client(svc, a.chain);
+      const r = await traceFunding(c, asHex(a.wallet), { range: svc.walletRange, label: (x) => KNOWN_LABELS[x]?.label ?? null });
+      const mixer = r.firstFunders.filter((f) => f.label?.includes('Tornado')).length;
+      return { data: { chain: info.key, ...r }, brief: `${r.firstFunders.length} funding source(s) found${mixer ? `, ${mixer} from a mixer` : ''}.`, nextActions: checkActions(r.firstFunders[0] ? [{ tool: 'verdict_label_address', reason: 'identify the first funder', args: { address: r.firstFunders[0].from } }] : []), _meta: noMeta };
+    },
+  }),
+  def({
+    name: 'verdict_label_address',
+    description: 'What is this address? Known labels (CEX hot wallets, mixers, routers, burn) plus onchain traits: token, liquidity pool, Safe multisig with its threshold, or a plain wallet with its activity. Cost: 0.2 units.',
+    input: z.object({ address: addr, chain }),
+    cost: () => TOOLS.verdict_label_address.cost,
+    async run(a, _c, svc) {
+      const { info, c } = client(svc, a.chain);
+      const r = await labelAddress(c, asHex(a.address));
+      return { data: { chain: info.key, ...r }, brief: `${r.label ?? r.kind}${r.traits.length ? `: ${r.traits[0]}` : ''}.`, nextActions: [], _meta: noMeta };
+    },
+  }),
+  def({
+    name: 'verdict_wallet_moves',
+    description: 'Track a whale or dev wallet: its recent token moves, marking sells and buys against the token\'s pools. Pass token to follow one token. Combine with verdict_watch_token for alerts. Cost: 1 unit.',
+    input: z.object({ wallet: addr, token: addr.optional(), chain }),
+    cost: () => TOOLS.verdict_wallet_moves.cost,
+    async run(a, _c, svc) {
+      const { info, c } = client(svc, a.chain);
+      const pools = a.token ? new Set((await svc.dex(a.token)).map((p) => p.pairAddress.toLowerCase())) : new Set<string>();
+      const r = await walletMoves(c, asHex(a.wallet), { range: svc.walletRange, token: a.token ? asHex(a.token) : undefined, pools });
+      return { data: { chain: info.key, ...r }, brief: `${r.moves.length} recent move(s): ${r.sold} sell(s), ${r.bought} buy(s)${a.token ? ' of this token' : ''}.`, nextActions: checkActions(a.token ? [{ tool: 'verdict_watch_token', reason: 'get alerted on the next drop', args: { address: a.token, ttlHours: 24, idempotencyKey: `watch-${a.token}` } }] : []), _meta: noMeta };
+    },
+  }),
+  def({
+    name: 'verdict_wallet_pnl',
+    description: 'Is this wallet a good trader or a bot? Buys and sells against pools in the recent window valued at current prices, holdings in USD, and an activity profile. True historical PnL needs historical prices; the result says so. Cost: 2 units.',
+    input: z.object({ wallet: addr, chain }),
+    cost: () => TOOLS.verdict_wallet_pnl.cost,
+    async run(a, _c, svc) {
+      const { info, c } = client(svc, a.chain);
+      const r = await walletPnl(c, asHex(a.wallet), info.key, { range: svc.walletRange, dex: svc.dex });
+      return { data: { chain: info.key, ...r }, brief: `${r.profile}; holds about $${r.heldUsd} across ${r.tokens.length} token(s).`, nextActions: [], _meta: noMeta };
+    },
+  }),
+  def({
+    name: 'verdict_prepare_swap',
+    description: 'Prepare a swap the user signs in their own wallet: judges the target token, checks VERDICT.md rules if given, and returns a prefilled Uniswap link on the right chain. Refuses to prepare when the verdict or the rules say no. Nothing is signed for the user. Cost: 1 unit.',
+    input: z.object({ from: z.string().describe('token address or NATIVE'), to: addr, amount: z.string().regex(/^\d+(\.\d+)?$/).optional(), amountUsd: z.number().nonnegative().optional(), rules: z.string().max(20_000).optional(), minScore: z.number().int().min(0).max(100).default(35), chain }),
+    cost: () => TOOLS.verdict_prepare_swap.cost,
+    async run(a, _c, svc) {
+      const { info } = client(svc, a.chain);
+      const to = normAddress(a.to);
+      let score: number | null = null, label: string | null = null;
+      if (info.key === 'robinhood') { try { const r = await svc.scan(to); score = r.verdict.score; label = r.verdict.label; } catch { /* no market */ } }
+      const policy = a.rules ? checkPol(parsePol(a.rules), { kind: 'swap', token: to, amountUsd: a.amountUsd, venue: 'uniswap', tokenScore: score }) : { allowed: true, violations: [] as string[] };
+      const blocked = (score !== null && score < a.minScore) || !policy.allowed;
+      const link = blocked ? null : uniswapLink(info.key, a.from, to, a.amount);
+      return {
+        data: { chain: info.key, to, verdict: { score, label }, policy, prepared: !blocked, link, signedBy: 'you, in your own wallet' },
+        brief: blocked ? `Not prepared: ${score !== null && score < a.minScore ? `verdict ${score} ${label} is below ${a.minScore}` : ''}${policy.violations.length ? `${score !== null && score < a.minScore ? '; ' : ''}${policy.violations.join('; ')}` : ''}.` : `Swap prepared on ${info.name}${score !== null ? ` (verdict ${score} ${label})` : ''}: open the link and sign in your wallet.`,
+        nextActions: checkActions(blocked ? [{ tool: 'verdict_explain_score', reason: 'see why the verdict is low', args: { address: to } }] : [{ tool: 'verdict_watch_token', reason: 'watch it after you buy', args: { address: to, ttlHours: 24, idempotencyKey: `watch-${to}` } }]),
+        _meta: noMeta,
+      };
+    },
+  }),
+  def({
+    name: 'verdict_bridge_check',
+    description: 'Before bridging: compares the token on both chains (liquidity, volume, price, whether a market exists at all) so the user does not bridge into a dead or fake pool, and points to the official Robinhood Chain bridge. Cost: 1 unit.',
+    input: z.object({ token: addr, fromChain: z.string().default('ethereum'), toChain: z.string().default('robinhood'), toToken: addr.optional() }),
+    cost: () => TOOLS.verdict_bridge_check.cost,
+    async run(a, _c, svc) {
+      const r = await bridgeSides(normAddress(a.token), a.fromChain, a.toChain, a.toToken ? normAddress(a.toToken) : undefined, svc.dex);
+      const warn: string[] = [];
+      if (!r.to) warn.push(`no market for this token on ${a.toChain}: you may not be able to sell after bridging`);
+      if (r.from && r.to && r.from.priceUsd && r.to.priceUsd && Math.abs(r.to.priceUsd / r.from.priceUsd - 1) > 0.05) warn.push(`price differs ${(Math.abs(r.to.priceUsd / r.from.priceUsd - 1) * 100).toFixed(1)}% between chains`);
+      if (r.to && (r.to.liquidityUsd ?? 0) < 10_000) warn.push(`only $${Math.round(r.to.liquidityUsd ?? 0)} liquidity on ${a.toChain}`);
+      return { data: { ...r, warnings: warn, officialBridge: BRIDGE_URL, signedBy: 'you, in the bridge app' }, brief: warn.length ? `Bridge with care: ${warn.join('; ')}.` : `Markets exist on both sides; use the official bridge.`, nextActions: [], _meta: noMeta };
+    },
+  }),
 ] as const;
 
-export const _unused = errors; // keep the import shape stable for future skill errors
+export const _unused = [errors, dexPairs];

@@ -26,6 +26,8 @@ export interface Watch {
   nextPollAt: string;
   idempotencyKey: string;
   argsHash: string;
+  /** alert with a prepared exit when the score falls below this */
+  stopLossBelow?: number | null;
 }
 
 export interface AlertRow {

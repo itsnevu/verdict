@@ -22,3 +22,4 @@ export * from './skills/report.js';
 export * from './skills/notify.js';
 export * from './skills/tx.js';
 export * from './skills/wallet.js';
+export * from './skills/deep.js';

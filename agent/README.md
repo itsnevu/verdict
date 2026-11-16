@@ -81,6 +81,16 @@ Identify your agent with the `X-Agent-Id` header or `params._meta.agent_id` on `
 | `verdict_lint_solidity {source}` | 0.2 | fund-losing patterns before deploy (not an audit) |
 | `verdict_check_policy {rules, action}` | 0.5 | check an action against VERDICT.md |
 | `verdict_track_record {horizonDays?}` | 0 | how often past verdicts held |
+| `verdict_wash_check {address}` | 1 | fake volume: turnover vs liquidity, balanced buys/sells, flat price, bot-sized trades, circular transfers |
+| `verdict_lp_status {address}` | 1 | can liquidity be pulled: LP burned / in contracts / in wallets; v3/v4 positions explained |
+| `verdict_deployer_history {address}` | 1 | launcher found from the first mint, every contract it deployed, serial-rugger flag |
+| `verdict_trace_funding {wallet}` | 1 | first funders, labelled (CEX, mixer, mint) |
+| `verdict_label_address {address}` | 0.2 | known labels + traits: pool, Safe multisig, token, wallet activity |
+| `verdict_wallet_moves {wallet, token?}` | 1 | whale/dev tracking: recent buys and sells against the pools |
+| `verdict_wallet_pnl {wallet}` | 2 | flows at current prices, holdings in USD, bot / trader profile |
+| `verdict_prepare_swap {from, to, amount?, rules?}` | 1 | verdict + VERDICT.md check, then a prefilled Uniswap link you sign |
+| `verdict_bridge_check {token, fromChain, toChain}` | 1 | market on both sides before bridging + official bridge |
+| `verdict_watch_token {…, stopLossBelow}` | 1 | stop-loss alert with a prepared exit link |
 
 ## Use it over HTTP
 

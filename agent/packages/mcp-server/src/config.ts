@@ -8,6 +8,8 @@ const Env = z.object({
   DATABASE_URL: z.string().optional(),
   REDIS_URL: z.string().optional(),
   RPC_URL: z.string().optional(),
+  /** RPC that serves historical state, used to find who deployed a contract */
+  ARCHIVE_RPC_URL: z.string().optional(),
   RPC_LOG_RANGE: z.coerce.number().int().positive().default(400000),
   DEX_BASE_URL: z.string().default('https://api.dexscreener.com'),
   DEX_CHAIN_ID: z.string().default('robinhood'),

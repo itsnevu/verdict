@@ -2,6 +2,7 @@ import { guardedFetch } from '../net.js';
 import { formatAlert, type AlertBody } from '../skills/notify.js';
 import type { VerdictService } from '../service.js';
 import { dedupeKey, evaluateAlerts } from './alerts.js';
+import { uniswapLink } from '../skills/deep.js';
 
 export interface WorkerOpts {
   intervalSeconds?: number;
@@ -53,6 +54,18 @@ export async function tick(svc: VerdictService, o: WorkerOpts = {}) {
           for (const url of targets) if (await deliver(url, body)) delivered++;
           fired.push({ address, kind: a.kind, key, delivered });
           svc.log.info('alert', { addr: address, kind: a.kind, webhooks: targets.length, delivered });
+        }
+      }
+      // stop-loss: per watcher threshold, fires once when the score crosses below it
+      if (current && current.score !== null) {
+        const prev = before.at(-1)?.score ?? null;
+        for (const sw of (await svc.store.watchersOf(address, nowIso)).filter((x) => x.stopLossBelow && current.score! < x.stopLossBelow && (prev === null || prev >= x.stopLossBelow))) {
+          const key = dedupeKey(address, `STOP_LOSS_${sw.stopLossBelow}`, nowIso);
+          if (!(await svc.store.insertAlert({ dedupeKey: key, address, kind: 'STOP_LOSS', ts: nowIso, payload: { threshold: sw.stopLossBelow, score: current.score }, delivered: false }))) continue;
+          const exit = uniswapLink('robinhood', address, 'NATIVE');
+          const body = { kind: 'STOP_LOSS', address, detail: `score ${current.score} fell below your stop-loss of ${sw.stopLossBelow}. Exit prepared, you sign: ${exit}`, verdict: { score: current.score, label: current.label, flags: current.flags }, brief: current.brief, ts: nowIso };
+          const ok = sw.webhookUrl ? await deliver(sw.webhookUrl, body) : false;
+          fired.push({ address, kind: 'STOP_LOSS', key, delivered: ok ? 1 : 0 });
         }
       }
       const idle = (r.inputs.market?.vol6hUsd ?? 0) === 0;

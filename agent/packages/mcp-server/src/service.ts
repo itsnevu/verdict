@@ -10,6 +10,7 @@ import type { Store } from './store/types.js';
 import type { OracleClient } from './oracle.js';
 import { ChainRegistry } from './skills/chains.js';
 import { openchainLookup, type SigLookup } from './skills/tx.js';
+import { dexPairs, type DexFetch } from './skills/deep.js';
 
 export type Oracle = Pick<OracleClient, 'read' | 'attest' | 'blockNumber' | 'writable' | 'txUrl' | 'address' | 'chainId' | 'status'>;
 
@@ -42,6 +43,7 @@ export interface ServiceDeps {
   /** how many recent blocks wallet skills look back */
   walletRange?: bigint;
   sigLookup?: SigLookup;
+  dex?: DexFetch;
 }
 
 export const sha = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -62,6 +64,7 @@ export class VerdictService {
   readonly chains: ChainRegistry;
   readonly walletRange: bigint;
   readonly sigLookup: SigLookup;
+  readonly dex: DexFetch;
   /** bytecode hash → contracts seen with it, for clone detection */
   readonly codeHashes = new Map<string, Set<string>>();
   private inflight = new Map<string, Promise<ScanResult>>();
@@ -79,6 +82,7 @@ export class VerdictService {
     this.chains = d.chains ?? new ChainRegistry();
     this.walletRange = d.walletRange ?? 400_000n;
     this.sigLookup = d.sigLookup ?? openchainLookup;
+    this.dex = d.dex ?? dexPairs;
     this.checkUrl = (u) => assertPublicUrl(u, { ...(d.resolve ? { resolve: d.resolve } : {}), allowInsecure: !!d.allowInsecureUrls });
     // probes never follow redirects and never read more than 256 KB
     const capped: typeof fetch = async (u, init) => { const g = await guardedFetch(String(u), { ...init, maxBytes: 256 * 1024 }); return new Response(g.text, { status: g.status >= 200 && g.status <= 599 ? g.status : 502 }); };

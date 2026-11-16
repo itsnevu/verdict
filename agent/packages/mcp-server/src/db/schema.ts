@@ -104,4 +104,5 @@ export const watches = pgTable('watches', {
   nextPollAt: ts('next_poll_at').notNull(),
   idemKey: text('idem_key').notNull(),
   argsHash: text('args_hash').notNull(),
+  stopLossBelow: integer('stop_loss_below'),
 }, (t) => [uniqueIndex('watches_owner_idem').on(t.ownerKey, t.idemKey), index('watches_next_poll').on(t.nextPollAt), index('watches_addr').on(t.addr)]);

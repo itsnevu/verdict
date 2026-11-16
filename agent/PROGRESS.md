@@ -16,6 +16,7 @@
 | 11 | Audit kesiapan mainnet: SSRF guard, watch & registry per pemilik (migrasi 0002), kuota/leaderboard per key/IP, API key di-hash + tolak key demo di produksi, TRUST_PROXY_HOPS, adapter tanpa konfigurasi tidak dipasang, seed menolak produksi, compare tidak menagih duplikat, nextActions tanpa alamat contoh, landing tanpa data palsu. Diverifikasi di compose produksi | sisa audit: poin 13-15 (performa) | 82/82 hijau, smoke lulus |
 | 12 | Robinhood Chain mainnet: data DexScreener `robinhood` + RPC getLogs; kontrak `VerdictOracle` (Foundry, 22 test + fuzz, coverage 100% baris), skrip deploy mainnet, tool `verdict_attest_token` + field `onchain` di scan + `POST /v1/attest`; e2e di anvil (chain id 4663): scan CRCL nyata → attest → baca balik dengan cast → serah terima owner → izin admin dan tolak ETH terverifikasi | deploy mainnet oleh user | 93/93 + 22/22 hijau |
 | 13 | 10 skill baru: read_contract (owner/proxy/mint/blacklist/fees/klon), decode_tx (7 chain EVM), wallet_holdings, wallet_score, wallet_approvals, prepare_revoke (+kill switch), simulate_tx, lint_solidity, check_policy (VERDICT.md), track_record; /report/:addr, /badge/:addr.svg; alert Discord/Telegram; diuji juga ke Robinhood Chain nyata | sisa 11 kemampuan butuh indexer | 109/109 hijau |
+| 14 | 9 tool terakhir + stop-loss (migrasi 0003) + ekstensi browser: 36/36 kemampuan live, 31 tool MCP; diuji ke Robinhood Chain nyata (wash CRCL 45/100, LP concentrated, deployer CRCL 0x2b94…3a87 dari mint pertama) | — | 121/121 hijau |
 
 ## Blokir
 

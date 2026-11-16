@@ -22,6 +22,15 @@ export const TOOLS = {
   verdict_lint_solidity: { cost: 0.2, write: false },
   verdict_check_policy: { cost: 0.5, write: false },
   verdict_track_record: { cost: 0, write: false },
+  verdict_wash_check: { cost: 1, write: false },
+  verdict_lp_status: { cost: 1, write: false },
+  verdict_deployer_history: { cost: 1, write: false },
+  verdict_trace_funding: { cost: 1, write: false },
+  verdict_label_address: { cost: 0.2, write: false },
+  verdict_wallet_moves: { cost: 1, write: false },
+  verdict_wallet_pnl: { cost: 2, write: false },
+  verdict_prepare_swap: { cost: 1, write: false },
+  verdict_bridge_check: { cost: 1, write: false },
 } as const;
 
 export type ToolName = keyof typeof TOOLS;

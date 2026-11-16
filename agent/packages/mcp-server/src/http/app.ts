@@ -80,6 +80,15 @@ export function buildApp(svc: VerdictService, o: { trustProxyHops?: number } = {
   app.post('/v1/simulate', tool('default', 'verdict_simulate_tx', (r) => r.body ?? {}));
   app.post('/v1/lint', tool('default', 'verdict_lint_solidity', (r) => r.body ?? {}));
   app.post('/v1/policy/check', tool('default', 'verdict_check_policy', (r) => r.body ?? {}));
+  app.get('/v1/wash/:addr', tool('default', 'verdict_wash_check', (r) => ({ address: (r.params as P).addr, chain: (r.query as Q).chain })));
+  app.get('/v1/lp/:addr', tool('default', 'verdict_lp_status', (r) => ({ address: (r.params as P).addr, chain: (r.query as Q).chain })));
+  app.get('/v1/deployer/:addr', tool('default', 'verdict_deployer_history', (r) => ({ address: (r.params as P).addr, chain: (r.query as Q).chain })));
+  app.get('/v1/wallet/:addr/funding', tool('default', 'verdict_trace_funding', (r) => ({ wallet: (r.params as P).addr, chain: (r.query as Q).chain })));
+  app.get('/v1/label/:addr', tool('default', 'verdict_label_address', (r) => ({ address: (r.params as P).addr, chain: (r.query as Q).chain })));
+  app.get('/v1/wallet/:addr/moves', tool('default', 'verdict_wallet_moves', (r) => ({ wallet: (r.params as P).addr, token: (r.query as Q).token, chain: (r.query as Q).chain })));
+  app.get('/v1/wallet/:addr/pnl', tool('default', 'verdict_wallet_pnl', (r) => ({ wallet: (r.params as P).addr, chain: (r.query as Q).chain })));
+  app.post('/v1/swap/prepare', tool('default', 'verdict_prepare_swap', (r) => r.body ?? {}));
+  app.get('/v1/bridge/check', tool('default', 'verdict_bridge_check', (r) => { const q = r.query as Q; return { token: q.token, fromChain: q.from, toChain: q.to, toToken: q.toToken }; }));
   app.get('/v1/track-record', tool('default', 'verdict_track_record', (r) => ({ horizonDays: num((r.query as Q).days) })));
 
   // shareable report page and badge (read-only, same scan cache)
