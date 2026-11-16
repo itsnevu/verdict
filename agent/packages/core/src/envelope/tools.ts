@@ -12,6 +12,16 @@ export const TOOLS = {
   verdict_watch_token: { cost: 1, write: true, scope: 'watch' },
   verdict_register_mcp: { cost: 1, write: true, scope: 'registry' },
   verdict_attest_token: { cost: 2, write: true, scope: 'attest' },
+  verdict_read_contract: { cost: 0.5, write: false },
+  verdict_decode_tx: { cost: 0.5, write: false },
+  verdict_wallet_holdings: { cost: 1, write: false },
+  verdict_wallet_score: { cost: 3, write: false },
+  verdict_wallet_approvals: { cost: 1, write: false },
+  verdict_prepare_revoke: { cost: 1, write: false },
+  verdict_simulate_tx: { cost: 0.5, write: false },
+  verdict_lint_solidity: { cost: 0.2, write: false },
+  verdict_check_policy: { cost: 0.5, write: false },
+  verdict_track_record: { cost: 0, write: false },
 } as const;
 
 export type ToolName = keyof typeof TOOLS;

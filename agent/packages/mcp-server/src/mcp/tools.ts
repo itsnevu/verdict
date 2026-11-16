@@ -5,6 +5,7 @@ import {
 } from '@verdictagent/core';
 import { sha, type VerdictService } from '../service.js';
 import type { Endpoint } from '../store/types.js';
+import { SKILL_DEFS } from './skill-tools.js';
 
 export interface CallCtx {
   /** self-declared (X-Agent-Id / _meta.agent_id); used for logs only, never for quota or ownership */
@@ -303,8 +304,8 @@ async function readOnchain(svc: VerdictService, address: string, inputs: Paramet
   }
 }
 
-type AnyTool = (typeof TOOL_DEFS)[number] | typeof ATTEST_DEF;
-export const ALL_TOOLS: readonly AnyTool[] = [...TOOL_DEFS, ATTEST_DEF];
+type AnyTool = (typeof TOOL_DEFS)[number] | typeof ATTEST_DEF | (typeof SKILL_DEFS)[number];
+export const ALL_TOOLS: readonly AnyTool[] = [...TOOL_DEFS, ATTEST_DEF, ...SKILL_DEFS];
 export const TOOL_MAP = new Map<string, AnyTool>(ALL_TOOLS.map((t) => [t.name, t]));
 
 /** JSON Schema for tools/list (zod v4 built-in). */

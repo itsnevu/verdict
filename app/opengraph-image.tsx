@@ -22,9 +22,14 @@ export default async function OgImage() {
     (
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: '#F1ECE3', color: '#0E0C0A', padding: 72, fontFamily: 'Space Grotesk' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, fontSize: 40, fontWeight: 800 }}>
-          <div style={{ width: 56, height: 56, background: '#0E0C0A', display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
-            <div style={{ width: 16, height: 16, background: '#FF3B12' }} />
-          </div>
+          <svg width="64" height="64" viewBox="0 0 100 100">
+            <defs>
+              <linearGradient id="l" x1="0" y1="0" x2="0.55" y2="1"><stop offset="0" stopColor="#F4EFE8" /><stop offset="0.6" stopColor="#F1E4DA" /><stop offset="1" stopColor="#FF3B12" /></linearGradient>
+            </defs>
+            <rect width="100" height="100" rx="18" fill="#0E0C0A" />
+            <path d="M65.7 21.7 H86 L57.8 78.3 L50 59.5 Z" fill="#FF3B12" />
+            <path d="M14 21.7 H31.7 L57.8 78.3 H41.8 Z" fill="url(#l)" />
+          </svg>
           VERDICT
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', fontSize: 112, fontWeight: 800, letterSpacing: -4, lineHeight: 0.95 }}>

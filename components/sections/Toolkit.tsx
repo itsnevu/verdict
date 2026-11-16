@@ -101,7 +101,7 @@ function Rules() {
         <input className="mono" value={t} onChange={(e) => setT(e.target.value)} placeholder="never touch tokens younger than 1h" aria-label="Add a rule" />
         <button type="submit" className="btn-ink mono">add</button>
       </form>
-      <p className="mono dim note">soon · the agent cannot break these, whatever you type later</p>
+      <p className="mono dim note">verdict_check_policy · every action is checked against these before anything is prepared</p>
     </Card>
   );
 }
@@ -130,7 +130,7 @@ function Works() {
   );
 }
 
-const TOOLS = ['scan_token', 'agent_brief', 'list_runners', 'token_history', 'explain_score', 'compare_tokens', 'budget', 'watch_token', 'attest_token', 'register_mcp', 'registry_search', 'registry_check'];
+const TOOLS = ['scan_token', 'agent_brief', 'list_runners', 'token_history', 'explain_score', 'compare_tokens', 'budget', 'watch_token', 'attest_token', 'register_mcp', 'registry_search', 'registry_check', 'read_contract', 'decode_tx', 'wallet_holdings', 'wallet_score', 'wallet_approvals', 'prepare_revoke', 'simulate_tx', 'lint_solidity', 'check_policy', 'track_record'];
 
 export default function Toolkit() {
   return (
@@ -145,7 +145,7 @@ export default function Toolkit() {
         <Explain /><Rules />
         <Watch /><Works />
         <article className="card tk s12 tk-tools" data-reveal>
-          <header className="tk-h"><span className="mono dim">07</span><h3>12 MCP tools, built and tested</h3>
+          <header className="tk-h"><span className="mono dim">07</span><h3>22 MCP tools, built and tested</h3>
             <span className="verified mono"><ShieldCheck size={14} aria-hidden /> tested</span></header>
           <ul className="tools mono">{TOOLS.map((t, i) => <li key={t}><span className="dim">{String(i + 1).padStart(2, '0')}</span> verdict_{t}</li>)}</ul>
         </article>

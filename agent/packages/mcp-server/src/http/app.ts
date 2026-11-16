@@ -5,6 +5,8 @@ import { rateLimit } from '../cache.js';
 import { handleRpcPayload } from '../mcp/protocol.js';
 import { runTool, type CallCtx } from '../mcp/tools.js';
 import { renderPage } from '../page/render.js';
+import { badgeSvg, reportHtml } from '../skills/report.js';
+import { readContractReport } from '../skills/contract.js';
 import type { VerdictService } from '../service.js';
 
 const LIMITS: Record<string, number> = { scan: 30, brief: 60, default: 60, mcp: 120 };
@@ -29,7 +31,7 @@ export function buildApp(svc: VerdictService, o: { trustProxyHops?: number } = {
     reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     reply.header('Cross-Origin-Resource-Policy', 'same-site');
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-    reply.header('Content-Security-Policy', req.url === '/' || req.url.startsWith('/?')
+    reply.header('Content-Security-Policy', req.url === '/' || req.url.startsWith('/?') || req.url.startsWith('/report/')
       ? "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
       : "default-src 'none'; frame-ancestors 'none'");
     return payload;
@@ -69,6 +71,38 @@ export function buildApp(svc: VerdictService, o: { trustProxyHops?: number } = {
   app.post('/v1/watch', tool('default', 'verdict_watch_token', (r) => r.body ?? {}));
   app.post('/v1/registry', tool('default', 'verdict_register_mcp', (r) => r.body ?? {}));
   app.get('/v1/registry', tool('default', 'verdict_registry_search', (r) => { const q = r.query as Q; return { query: q.query, minTrust: num(q.minTrust), limit: num(q.limit) }; }));
+  app.get('/v1/contract/:addr', tool('default', 'verdict_read_contract', (r) => ({ address: (r.params as P).addr, chain: (r.query as Q).chain })));
+  app.get('/v1/tx/:hash', tool('default', 'verdict_decode_tx', (r) => ({ hash: (r.params as { hash: string }).hash, chain: (r.query as Q).chain })));
+  app.get('/v1/wallet/:addr/holdings', tool('default', 'verdict_wallet_holdings', (r) => ({ wallet: (r.params as P).addr, chain: (r.query as Q).chain })));
+  app.get('/v1/wallet/:addr/approvals', tool('default', 'verdict_wallet_approvals', (r) => ({ wallet: (r.params as P).addr, chain: (r.query as Q).chain })));
+  app.get('/v1/wallet/:addr/score', tool('default', 'verdict_wallet_score', (r) => ({ wallet: (r.params as P).addr })));
+  app.post('/v1/revoke/prepare', tool('default', 'verdict_prepare_revoke', (r) => r.body ?? {}));
+  app.post('/v1/simulate', tool('default', 'verdict_simulate_tx', (r) => r.body ?? {}));
+  app.post('/v1/lint', tool('default', 'verdict_lint_solidity', (r) => r.body ?? {}));
+  app.post('/v1/policy/check', tool('default', 'verdict_check_policy', (r) => r.body ?? {}));
+  app.get('/v1/track-record', tool('default', 'verdict_track_record', (r) => ({ horizonDays: num((r.query as Q).days) })));
+
+  // shareable report page and badge (read-only, same scan cache)
+  app.get('/report/:addr', async (req, reply) => {
+    if (!(await limit(req, reply, 'scan'))) return reply;
+    const out = await runTool(svc, 'verdict_scan_token', { address: (req.params as P).addr }, { ...ctxOf(req), agentId: `report:${req.ip}` });
+    reply.header('content-type', 'text/html; charset=utf-8');
+    if (!out.ok) return reply.code(out.status).send(renderPage({ address: (req.params as P).addr, result: out }));
+    const v = out.envelope.data as Parameters<typeof reportHtml>[0]['verdict'];
+    const history = await svc.store.history(v.address, '1970-01-01T00:00:00.000Z');
+    const contract = await readContractReport(svc.chains.client('robinhood'), v.address as `0x${string}`, svc.codeHashes).then((c) => c as unknown as Record<string, unknown>, () => null);
+    return reply.send(reportHtml({ verdict: v, brief: out.envelope.brief ?? '', history, contract, generatedAt: svc.nowIso().slice(0, 19).replace('T', ' '), sources: out.envelope._meta.sources }));
+  });
+  app.get('/badge/:file', async (req, reply) => {
+    const addrPart = (req.params as { file: string }).file.replace(/\.svg$/, '');
+    if (!(await limit(req, reply, 'brief'))) return reply;
+    const out = await runTool(svc, 'verdict_agent_brief', { address: addrPart }, { ...ctxOf(req), agentId: `badge:${req.ip}` });
+    const d = out.ok ? (out.envelope.data as { score: number | null; label: string | null }) : null;
+    const scan = out.ok ? await svc.scan(addrPart.toLowerCase()).catch(() => null) : null;
+    return reply.header('content-type', 'image/svg+xml').header('cache-control', 'public, max-age=300')
+      .send(badgeSvg(d ? { score: d.score, label: d.label as never } : null, scan?.verdict.symbol ?? null));
+  });
+
   app.post('/v1/attest', tool('default', 'verdict_attest_token', (r) => r.body ?? {}));
   app.get('/v1/registry/check', tool('default', 'verdict_registry_check', (r) => ({ idOrUrl: (r.query as Q).id ?? (r.query as Q).url })));
 

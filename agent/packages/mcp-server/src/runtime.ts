@@ -5,6 +5,7 @@ import { loadConfig, parseApiKeys, type Config } from './config.js';
 import { createLogger, type Logger } from './log.js';
 import { keyHash } from './mcp/tools.js';
 import { OracleClient } from './oracle.js';
+import { ChainRegistry } from './skills/chains.js';
 import { VerdictService } from './service.js';
 import { buildSources } from './sources.js';
 import { MemoryStore } from './store/memory.js';
@@ -44,7 +45,7 @@ export async function bootstrap(env: NodeJS.ProcessEnv = process.env): Promise<{
     ? new OracleClient({ address: cfg.ORACLE_ADDRESS as `0x${string}`, rpcUrl: cfg.ORACLE_RPC_URL ?? cfg.RPC_URL ?? 'https://rpc-robinhood.globalstake.io', chainId: cfg.ORACLE_CHAIN_ID, ...(cfg.ATTESTER_PRIVATE_KEY ? { privateKey: cfg.ATTESTER_PRIVATE_KEY as `0x${string}` } : {}) })
     : null;
   if (oracle) log.info('oracle', { address: oracle.address, chainId: oracle.chainId, writable: oracle.writable });
-  const svc = new VerdictService({ oracle,  store, cache, sources, log, quotaPerDay: cfg.QUOTA_UNITS_PER_DAY, scanCacheSeconds: cfg.SCAN_CACHE_SECONDS, leaderboardMinCalls: cfg.LEADERBOARD_MIN_CALLS, allowInsecureUrls: cfg.ALLOW_INSECURE_URLS === '1' });
+  const svc = new VerdictService({ chains: new ChainRegistry(cfg.RPC_URL), walletRange: BigInt(cfg.RPC_LOG_RANGE), oracle,  store, cache, sources, log, quotaPerDay: cfg.QUOTA_UNITS_PER_DAY, scanCacheSeconds: cfg.SCAN_CACHE_SECONDS, leaderboardMinCalls: cfg.LEADERBOARD_MIN_CALLS, allowInsecureUrls: cfg.ALLOW_INSECURE_URLS === '1' });
   return { cfg, svc, log, shutdown: async () => { await Promise.allSettled([store.close(), cache.close()]); } };
 }
 

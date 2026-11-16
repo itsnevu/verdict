@@ -71,6 +71,16 @@ Identify your agent with the `X-Agent-Id` header or `params._meta.agent_id` on `
 | `verdict_registry_search {query?, minTrust?, limit?}` | 0.2 | find third-party MCP servers by trust |
 | `verdict_registry_check {idOrUrl}` | 1 | re-probe one endpoint |
 | `verdict_attest_token {address, idempotencyKey}` | 2 | scope `attest`; write the verdict to VerdictOracle on Robinhood Chain |
+| `verdict_read_contract {address, chain?}` | 0.5 | owner, renounced, pause, proxy, risky functions (mint, blacklist, fees), clones |
+| `verdict_decode_tx {hash, chain?}` | 0.5 | explain any tx on robinhood, ethereum, base, arbitrum, optimism, bsc, polygon |
+| `verdict_wallet_holdings {wallet, chain?}` | 1 | tokens held (recent window) with balances |
+| `verdict_wallet_score {wallet}` | 3 | judge every held token + risky approvals |
+| `verdict_wallet_approvals {wallet, chain?}` | 1 | live approvals rated high / medium / low |
+| `verdict_prepare_revoke {wallet, all? \| pairs?}` | 1 | unsigned approve(spender, 0) txs, simulated; `all: true` is the kill switch |
+| `verdict_simulate_tx {from, to, data?, value?}` | 0.5 | eth_call + gas, revert reason |
+| `verdict_lint_solidity {source}` | 0.2 | fund-losing patterns before deploy (not an audit) |
+| `verdict_check_policy {rules, action}` | 0.5 | check an action against VERDICT.md |
+| `verdict_track_record {horizonDays?}` | 0 | how often past verdicts held |
 
 ## Use it over HTTP
 
@@ -87,6 +97,9 @@ Identify your agent with the `X-Agent-Id` header or `params._meta.agent_id` on `
 | `POST /v1/registry` · `GET /v1/registry` · `GET /v1/registry/check?id=` | registry | scope `registry` for POST |
 | `POST /v1/attest` | attest_token | scope `attest`, costs gas |
 | `GET /v1/agents` | leaderboard | active after 200 real calls |
+| `GET /v1/contract/:addr` · `GET /v1/tx/:hash` · `GET /v1/wallet/:addr/{holdings,approvals,score}` | inspect | 60/min |
+| `POST /v1/revoke/prepare` · `POST /v1/simulate` · `POST /v1/lint` · `POST /v1/policy/check` | act | 60/min |
+| `GET /v1/track-record` · `GET /report/:addr` · `GET /badge/:addr.svg` | prove | 60/min |
 | `GET /v1/health` | | |
 
 Every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.

@@ -3,17 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Menu, Moon, Sun, X as Close } from 'lucide-react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Odometer from './fx/Odometer';
+import BrandMark from './BrandMark';
 import { brand, nav } from '@/lib/content';
 import { scrollToId, useBlock } from '@/lib/runtime';
 
-export function Logo({ size = 24 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className="logo">
-      <rect x="1" y="1" width="22" height="22" fill="var(--ink)" />
-      <path d="M6 6l6 12 6-12" fill="none" stroke="var(--paper)" strokeWidth="2.6" strokeLinejoin="miter" />
-      <rect x="16.5" y="15.5" width="4" height="4" fill="var(--vermilion)" />
-    </svg>
-  );
+export function Logo({ size = 26 }: { size?: number }) {
+  return <BrandMark size={size} className="logo" />;
 }
 
 function XLogo() {

@@ -1,4 +1,5 @@
 import { guardedFetch } from '../net.js';
+import { formatAlert, type AlertBody } from '../skills/notify.js';
 import type { VerdictService } from '../service.js';
 import { dedupeKey, evaluateAlerts } from './alerts.js';
 
@@ -23,7 +24,8 @@ export async function tick(svc: VerdictService, o: WorkerOpts = {}) {
   const deliver = o.deliver ?? (async (url: string, body: unknown) => {
     try {
       await svc.checkUrl(url); // re-checked at delivery: DNS may have changed since registration
-      const r = await guardedFetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), maxBytes: 4096 });
+      const f = formatAlert(url, body as AlertBody);
+      const r = await guardedFetch(f.url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(f.body), maxBytes: 4096 });
       return r.ok;
     } catch { return false; }
   });
