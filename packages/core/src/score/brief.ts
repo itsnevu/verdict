@@ -3,7 +3,7 @@ import { round } from './clamp.js';
 import { rawSignals } from './engine.js';
 
 const pct = (v: number) => `${round(v * 100)}%`;
-const x = (v: number) => `${round(v, 1)}×`;
+const x = (v: number) => `${v > 0 && v < 0.1 ? round(v, 3) : round(v, 1)}×`;
 
 /**
  * Deterministic one-paragraph summary assembled from templates.

@@ -213,3 +213,11 @@ describe('brief', () => {
     const ok = fx('rushr'); expect(buildBrief(evaluate(ok), ok)).toMatch(/laju (naik|turun)/);
   });
 });
+
+describe('brief number formatting', () => {
+  it('keeps small ratios visible instead of rounding them to 0×', () => {
+    const i = fx('rushr');
+    i.market = { ...i.market!, vol6hUsd: i.market!.mcUsd * 0.004 };
+    expect(buildBrief(evaluate(i), i)).toContain('0.004× market cap');
+  });
+});

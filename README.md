@@ -1,0 +1,131 @@
+# verdictagent
+
+**Is this token still alive?** verdictagent gives AI agents a deterministic, explainable on-chain verdict before they act. It does not launch tokens, trade, or hold funds.
+
+- MCP first (`POST /mcp`, or stdio via `verdict-mcp`), with an HTTP twin for every tool
+- Scores come from fixed piecewise-linear rules, never from an LLM: same input, same output
+- Every response: `data`, a one-paragraph `brief`, `_meta` (sources, confidence, cost, degraded) and valid `nextActions`
+
+```
+sources (DexScreener, RPC, BasedBot) ── DataSource interface
+                 │
+        deterministic score engine (packages/core)
+                 │
+   ┌─────────────┼──────────────┬─────────┐
+ HTTP API    MCP server        SDK      worker
+```
+
+Packages: `@verdictagent/core` (engine, adapters, envelope), `@verdictagent/mcp-server` (HTTP, MCP, worker, DB), `@verdictagent/sdk` (HTTP client).
+
+## Run it
+
+Requirements: Node 22+, pnpm (`corepack enable`).
+
+```bash
+pnpm install
+pnpm build
+cp .env.example .env
+
+# fully in memory, with the bundled synthetic tokens (0x…a001 to 0x…a005)
+USE_MOCK_SOURCE=1 node packages/mcp-server/dist/server.js
+open http://localhost:8080/?address=0x000000000000000000000000000000000000a002
+```
+
+With Postgres, Redis and the alert worker:
+
+```bash
+cp .env.example .env          # set RPC_URL for holder data
+docker compose up -d --build
+curl localhost:8080/v1/health
+docker compose exec api node dist/seed.js   # optional: synthetic history, registry, leaderboard
+docker compose down
+```
+
+## Use it over MCP
+
+Remote (Streamable HTTP, stateless, JSON responses):
+
+```bash
+claude mcp add --transport http verdictagent https://verdictagent.xyz/mcp
+```
+
+Local (stdio):
+
+```json
+{ "mcpServers": { "verdictagent": { "command": "node", "args": ["packages/mcp-server/bin/verdict-mcp"], "env": { "USE_MOCK_SOURCE": "0", "VERDICT_AGENT_ID": "my-agent" } } } }
+```
+
+Identify your agent with the `X-Agent-Id` header or `params._meta.agent_id` on `tools/call`. Write tools need `Authorization: Bearer <key>` with the right scope.
+
+| tool | cost | what it is for |
+|---|---|---|
+| `verdict_scan_token {address}` | 1 | full verdict before acting. Not for monitoring |
+| `verdict_agent_brief {address}` | 0.2 | only the paragraph, for context-tight agents |
+| `verdict_list_runners {label?, minScore?, limit?}` | 0.5 | ranked list of judged tokens |
+| `verdict_token_history {address, hours}` | 0.5 | stored timeline, oldest first |
+| `verdict_explain_score {address, signal?}` | 0.5 | per-signal raw, score, weight, contribution, points, overrides |
+| `verdict_compare_tokens {addresses[2..5]}` | 1 each | rank candidates |
+| `verdict_budget {}` | 0 | remaining daily units |
+| `verdict_watch_token {address, webhookUrl?, ttlHours?, idempotencyKey}` | 1 | scope `watch`; alerts instead of polling |
+| `verdict_register_mcp {url, declaredTools[], contractTargets[], idempotencyKey}` | 1 | scope `registry`; probe + trust score |
+| `verdict_registry_search {query?, minTrust?, limit?}` | 0.2 | find third-party MCP servers by trust |
+| `verdict_registry_check {idOrUrl}` | 1 | re-probe one endpoint |
+
+## Use it over HTTP
+
+| route | tool | limits |
+|---|---|---|
+| `GET /v1/scan/:addr` | scan | cache 45s, 30/min/IP |
+| `GET /v1/brief/:addr` | agent_brief | cache 45s, 60/min/IP |
+| `GET /v1/tokens?label&minScore&limit` | list_runners | 60/min |
+| `GET /v1/tokens/:addr/history?hours` | token_history | 60/min |
+| `GET /v1/explain/:addr?signal` | explain_score | 60/min |
+| `GET /v1/compare?addresses=a,b` | compare_tokens | 60/min |
+| `GET /v1/budget` | budget | 60/min |
+| `POST /v1/watch` | watch_token | scope `watch` |
+| `POST /v1/registry` · `GET /v1/registry` · `GET /v1/registry/check?id=` | registry | scope `registry` for POST |
+| `GET /v1/agents` | leaderboard | active after 200 real calls |
+| `GET /v1/health` | | |
+
+Every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+
+```json
+{
+  "data": { "score": 48, "label": "DECAYING", "confidence": 1, "flags": ["PUMP_EXHAUSTED", "MC_COLLAPSED"], "breakdown": [ … ] },
+  "brief": "ZOLVA skor 48 (DECAYING, confidence 1). Volume 6 jam 3.1× market cap tapi laju turun 71% dibanding 24 jam, pola pump yang kehabisan pembeli. Likuiditas 14% MC. 2 flag: PUMP_EXHAUSTED, MC_COLLAPSED.",
+  "_meta": { "engineVersion": "1.0.0", "fetchedAt": "…", "sources": [ … ], "confidence": 1, "costUnits": 1, "degraded": false, "agentId": "my-agent" },
+  "nextActions": [ { "tool": "verdict_explain_score", "reason": "see which signal drove the score", "args": { "address": "0x…" } } ]
+}
+```
+
+Errors keep the same shape with `error: {code, message, retryable, fix}`, e.g. `SCOPE_REQUIRED`, `INVALID_ADDRESS`, `TOKEN_NOT_FOUND`, `BUDGET_EXHAUSTED`, `IDEMPOTENCY_CONFLICT`, `RATE_LIMITED`.
+
+## How the score works
+
+Nine signals, each mapped through a piecewise-linear clamp, weighted: `liq_ratio` 0.18, `top10_share` 0.18, `dev_share` 0.14, `vol_mc` 0.14, `vol_trend` 0.12, `unique_ratio` 0.10, `holder_growth_24h` 0.08, `buy_sell_ratio` 0.04, `age_hours` 0.02. Missing signals are reported as `unavailable` and their weight is shared proportionally. Overrides then run in order: honeypot cap 25, dev > 50% cap 35, liquidity < $3000 cap 30, no volume after 24h → DEAD, bundled launch × 0.85, wash trading → confidence −0.2. Labels: ≥75 HEALTHY, 55–74 WATCH, 35–54 DECAYING, 20–34 COLLAPSING, < 20 DEAD. The point tables live in `packages/core/src/score/signals.ts`; `verdict_explain_score` returns them.
+
+## Develop
+
+```bash
+pnpm test --coverage   # gates: ≥80% lines in core/src/score and mcp-server/src/mcp
+pnpm typecheck
+pnpm lint              # scripts/lint.mjs: reasoned TODOs, deterministic scoring, banned words, no console.log
+pnpm build && pnpm smoke   # end-to-end: health, MCP HTTP + stdio, degraded scan, one live DexScreener scan
+python scripts/make-fixtures.py   # regenerate test/fixtures (synthetic: true)
+```
+
+Switch an adapter off with `DISABLE_SOURCES=dexscreener` (or `rpc`, `basedbot`): scans still return, with `_meta.degraded: true` and lower confidence.
+
+## Asumsi
+
+- **Chain.** Ekosistem BasedBot dianggap berada di Base; DexScreener memakai `chainId=base` (`DEX_CHAIN_ID`).
+- **BasedBot tidak punya skema publik.** Adapter dibangun dari env (`BASEDBOT_BASE_URL` + template path), parser menerima beberapa nama field umum, dan hasilnya selalu `complete:false` sampai `BASEDBOT_SCHEMA_VERIFIED=1`. Tidak ada skema yang dikarang.
+- **Holder dari RPC biasa bersifat perkiraan.** Node JSON-RPC tidak punya method holder, jadi holder direkonstruksi dari log `Transfer` pada `RPC_LOG_RANGE` blok terakhir lalu dicek ulang dengan `balanceOf`. Hasilnya ditandai `approximate` dan confidence −0.3 (bagian 20). `holder_growth_24h` tidak tersedia dari RPC.
+- **Unique wallets.** API publik DexScreener tidak menyediakan jumlah wallet unik, jadi `unique_ratio` tidak tersedia kecuali ada sumber lain.
+- **Honeypot dan funding source** butuh simulasi jual dan trace transaksi (indexer / `debug_trace`); RPC biasa tidak bisa, jadi keduanya `complete:false` dan override honeypot/bundle hanya aktif bila sumber lain menyediakannya.
+- **Pool/LP/burn** yang dikecualikan dari `top10_share`: alamat pair dari DexScreener, alamat nol, `0x…dEaD`, dan kontrak token itu sendiri.
+- **Kuota** default 500 unit per agent per hari UTC; agent tanpa `X-Agent-Id` dihitung per IP.
+- **Brief** berbahasa Indonesia mengikuti contoh di spesifikasi; klausa disambung koma, bukan em dash.
+- **Fixture** di `test/fixtures/` sintetis (`synthetic: true`), dibuat oleh `scripts/make-fixtures.py`.
+
+Keputusan lain beserta cara membaliknya ada di [DECISIONS.md](DECISIONS.md).
