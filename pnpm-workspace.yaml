@@ -1,4 +1,5 @@
 packages:
   - packages/*
+# esbuild ships with vitest; its install script only fetches a native binary, not needed for tsc builds or tests
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: false

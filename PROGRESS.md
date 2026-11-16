@@ -12,7 +12,8 @@
 | 8 | Fase 8: registry MCP (register/search/check, trust 40/40/20, cap 40 untuk write tanpa target), identitas agent (X-Agent-Id / _meta.agent_id), leaderboard hit_rate (aktif ≥200 panggilan, ≥20 scan), seed sintetis | fase 9 | 61/61 hijau |
 | 9 | Fase 9: halaman server-rendered, Dockerfile multi-stage non-root + healthcheck, docker-compose (api, worker, postgres, redis), `.env.example`, README + Asumsi, `scripts/smoke.mjs` (14 cek end-to-end termasuk 1 scan DexScreener nyata), REPORT.md | selesai | 72/72 hijau, coverage score 99.2% / mcp 100%, smoke lulus |
 
+| 10 | Verifikasi Docker: `docker compose up -d --build` bersih (api healthy, postgres, redis, worker), `/v1/health` ok, migrasi 0000+0001 terpasang di Postgres, seed → leaderboard aktif + registry dari Postgres, scan nyata DEGEN dengan `DISABLE_SOURCES=basedbot` → `degraded: true`, MCP tools/list 11 + tools/call, watch idempoten di Postgres, worker mem-poll watch tiap 60s, SIGTERM → shutdown rapi, `docker compose down` bersih | selesai | 72/72 hijau |
+
 ## Blokir
 
-- `TODO(blocked)`: `docker compose up -d && curl /v1/health && docker compose down` (bagian 21/22) belum bisa dijalankan — Docker Desktop terpasang tapi daemon tidak jalan di mesin build. Yang sudah diverifikasi: `docker compose config` valid; server hasil build lulus smoke test end-to-end dengan store in-memory. Jalankan perintah di atas di mesin dengan Docker aktif.
-- `TODO(blocked)`: `PgStore` (Drizzle) dan migrasi `0000`/`0001` belum dijalankan ke Postgres sungguhan karena alasan yang sama. Semua test memakai `MemoryStore` dengan antarmuka `Store` yang sama.
+Tidak ada. Dua blokir sebelumnya (`docker compose up` dan `PgStore` ke Postgres sungguhan) selesai di baris 10.

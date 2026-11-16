@@ -58,8 +58,12 @@ pnpm smoke                                                     # verifikasi end-
 | `pnpm lint` | bersih |
 | `pnpm build` | bersih |
 | `pnpm smoke` | 14/14: health, MCP HTTP (initialize, tools/list = 11, tools/call), amplop valid, X-RateLimit-*, SCOPE_REQUIRED, halaman, adapter dimatikan lewat env, **scan nyata DEGEN di Base via DexScreener** (skor 45 DECAYING, confidence 0.5, `degraded: true`), MCP stdio |
-| `docker compose config` | valid |
-| `docker compose up` + `/v1/health` | **belum dijalankan**: daemon Docker tidak aktif di mesin build |
+| `docker compose up -d --build` | bersih: api (healthy), worker, postgres 16, redis 7 |
+| `/v1/health` di compose | `status: ok`, db true, cache true |
+| Postgres | migrasi `0000` + `0001` terpasang; seed, leaderboard (240 panggilan, aktif), registry, watch idempoten, semuanya lewat `PgStore` |
+| adapter dimatikan via env di compose | `DISABLE_SOURCES=basedbot` → scan nyata DEGEN skor 45, `degraded: true` |
+| worker di compose | mem-poll watch, `next_poll_at` maju 60s, skor baru tersimpan |
+| `docker compose down` | SIGTERM → log `shutdown`, stack turun bersih |
 
 ## Adapter yang masih `complete:false`
 
@@ -75,11 +79,11 @@ pnpm smoke                                                     # verifikasi end-
 ## Penanda simplified dan blocked
 
 - simplified: tidak ada penanda di kode.
-- blocked: `docker compose up` dan `PgStore` + migrasi terhadap Postgres sungguhan belum dijalankan; daemon Docker tidak aktif. Detail di PROGRESS.md.
+- blocked: tidak ada. Verifikasi Docker dan Postgres selesai (PROGRESS baris 10).
 
 ## 5 langkah lanjutan paling bernilai
 
-1. **Jalankan compose dan PgStore sekali di mesin dengan Docker**, lalu tambahkan test integrasi Postgres (testcontainers atau service CI) supaya `PgStore` punya coverage yang sama dengan `MemoryStore`.
+1. **Test integrasi Postgres otomatis** (service Postgres di CI): `PgStore` sudah terbukti jalan di compose, tapi belum diuji otomatis seperti `MemoryStore`.
 2. **Sumber holder dan funding yang lengkap**: indexer Base (mis. API explorer) untuk `holderCount24hAgo`, early buyers ber-USD, dan funding source. Ini menyalakan `holder_growth_24h`, `unique_ratio`, BUNDLED, dan WASH_SUSPECT pada data nyata, yang sekarang hanya aktif di fixture.
 3. **Verifikasi skema BasedBot** terhadap respons asli, tulis fixture dari respons nyata, lalu set `BASEDBOT_SCHEMA_VERIFIED=1` agar confidence tidak terpotong 0.2 untuk token launchpad.
 4. **Simulasi jual untuk honeypot**: `eth_call` swap kecil lewat router Uniswap/Aerodrome di Base dengan state override. Override honeypot cap 25 adalah sinyal paling berharga bagi agent yang akan membeli.

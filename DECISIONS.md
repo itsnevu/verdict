@@ -26,3 +26,5 @@ Format: `[waktu UTC] keputusan — alasan — cara balik`
 - [2026-11-16 11:17] Kuota harian default 500 unit per agent (`QUOTA_UNITS_PER_DAY`), reset 00:00 UTC — brief tidak menyebut angka — ubah env.
 - [2026-11-16 11:18] `coverage.all: false` — di Windows Vitest mencatat `c:` dan `C:` sebagai dua file sehingga coverage tampak 45%; semua file yang di-gate dimuat oleh test — kembalikan `all: true` di Linux/CI.
 - [2026-11-16 11:19] Halaman `/` berbahasa Inggris, brief tetap bahasa Indonesia sesuai contoh bagian 9 — halaman dipakai developer internasional, brief mengikuti template — terjemahkan string di `page/render.ts`.
+- [2026-11-16 12:10] `allowBuilds: { esbuild: false }` di `pnpm-workspace.yaml` — pnpm 12 menggagalkan `install --frozen-lockfile` di Docker bila ada build script yang belum diputuskan; esbuild hanya dibawa Vitest dan tidak dipakai saat build — set ke `true` bila suatu saat butuh esbuild native.
+- [2026-11-16 12:12] `.dockerignore` memakai `**/dist` dan `**/*.tsbuildinfo` — `tsconfig.tsbuildinfo` per package ikut tersalin sehingga `tsc -b` di image menganggap build sudah up-to-date dan tidak menghasilkan `dist` — tidak ada alasan membalik.
