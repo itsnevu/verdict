@@ -20,7 +20,8 @@ button{padding:10px 16px;border:1.5px solid var(--ink);background:var(--ink);col
 .wrap{overflow-x:auto;margin-bottom:20px}table{width:100%;border-collapse:collapse;min-width:620px}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--ink) 18%,transparent)}
 th{font:600 11px ui-monospace,monospace;text-transform:uppercase;letter-spacing:.12em;color:var(--soft)}td.num{text-align:right;font-family:ui-monospace,monospace}
 h2{font-size:14px;text-transform:uppercase;letter-spacing:.14em;margin:24px 0 8px}.err{border:1.5px solid var(--red);padding:14px}
-footer{margin-top:40px;color:var(--soft);font-size:13px}a{color:inherit}`;
+footer{margin-top:40px;color:var(--soft);font-size:13px}a{color:inherit}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}`;
 
 export function renderPage(o: { address?: string; result?: { ok: true; envelope: Envelope<unknown> } | { ok: false; envelope: ErrorEnvelope } }) {
   let body = '';
@@ -42,16 +43,20 @@ export function renderPage(o: { address?: string; result?: { ok: true; envelope:
 <div class="flags">${v.flags.length ? v.flags.map((f) => `<span>${esc(f)}</span>`).join('') : '<span class="na" style="border:0">none</span>'}</div>
 <h2>Breakdown</h2>
 <div class="wrap"><table>
-<thead><tr><th>signal</th><th>raw</th><th>signal score</th><th>weight</th><th>contribution</th></tr></thead>
+<caption class="sr">How each signal contributed to the score</caption>
+<thead><tr><th scope="col">signal</th><th scope="col">raw</th><th scope="col">signal score</th><th scope="col">weight</th><th scope="col">contribution</th></tr></thead>
 <tbody>${v.breakdown.map((r) => `<tr><td class="mono">${esc(r.signal)}</td><td class="num">${fmt(r.raw, 4)}</td><td class="num">${fmt(r.score, 1)}</td><td class="num">${esc(r.weight)}${r.status === 'ok' && r.effectiveWeight !== r.weight ? ` <span class="na">→ ${esc(r.effectiveWeight)}</span>` : ''}</td><td class="num">${r.status === 'ok' ? esc(r.contribution) : '<span class="na">unavailable</span>'}</td></tr>`).join('')}</tbody>
 </table></div>
 ${v.overrides.length ? `<h2>Overrides</h2><ul class="mono">${v.overrides.map((x) => `<li>${esc(x.rule)}: ${esc(x.effect)}</li>`).join('')}</ul>` : ''}
 <h2>Sources</h2>
-<div class="wrap"><table><thead><tr><th>source</th><th>method</th><th>fetched (UTC)</th><th>complete</th></tr></thead>
+<div class="wrap"><table><caption class="sr">Data sources used for this verdict</caption><thead><tr><th scope="col">source</th><th scope="col">method</th><th scope="col">fetched (UTC)</th><th scope="col">complete</th></tr></thead>
 <tbody>${env._meta.sources.map((s) => `<tr><td class="mono">${esc(s.name)}</td><td class="mono">${esc(s.method)}</td><td class="mono">${esc(s.fetchedAt)}</td><td class="mono">${s.complete ? 'yes' : `no <span class="na">${esc(s.error ?? '')}</span>`}</td></tr>`).join('')}</tbody></table></div>`;
   }
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>verdictagent</title><style>${CSS}</style></head><body><main>
+<title>verdictagent: is this token still alive?</title>
+<meta name="description" content="Deterministic, explainable on-chain verdicts for AI agents: score, label, confidence and every signal behind it.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230E0C0A'/%3E%3Cpath d='M8 8l8 16 8-16' fill='none' stroke='%23F1ECE3' stroke-width='3.4'/%3E%3Crect x='22' y='21' width='6' height='6' fill='%23FF3B12'/%3E%3C/svg%3E">
+<style>${CSS}</style></head><body><main>
 <h1>verdictagent</h1><p class="sub">Is this token still alive? A deterministic verdict, explained signal by signal.</p>
 <form method="get" action="/"><input name="address" placeholder="0x… token address" value="${esc(o.address ?? '')}" aria-label="token address" required pattern="0x[0-9a-fA-F]{40}"><button type="submit">Judge</button></form>
 ${body}

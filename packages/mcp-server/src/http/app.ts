@@ -21,6 +21,20 @@ export function buildApp(svc: VerdictService, o: { trustProxyHops?: number } = {
   // only trust X-Forwarded-For from a known number of proxies; otherwise clients could spoof their IP to dodge limits
   const app = Fastify({ logger: false, trustProxy: o.trustProxyHops ? (_addr: string, hop: number) => hop < o.trustProxyHops! : false, bodyLimit: 256 * 1024 });
 
+  // security headers on every response; the page needs inline styles only (no scripts at all)
+  app.addHook('onSend', async (req, reply, payload) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    reply.header('Cross-Origin-Resource-Policy', 'same-site');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    reply.header('Content-Security-Policy', req.url === '/' || req.url.startsWith('/?')
+      ? "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+      : "default-src 'none'; frame-ancestors 'none'");
+    return payload;
+  });
+
   const limit = async (req: FastifyRequest, reply: FastifyReply, bucket: string) => {
     const max = LIMITS[bucket] ?? LIMITS.default!;
     const r = await rateLimit(svc.cache, `${bucket}:${req.ip}`, max, 60);

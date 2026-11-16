@@ -80,7 +80,7 @@ describe('HTTP API', () => {
     expect(empty.body).toContain('<form');
     const page = await app.inject({ url: `/?address=${T.zolva}` });
     expect(page.body).toContain('PUMP_EXHAUSTED');
-    expect(page.body).toContain('<th>contribution</th>');
+    expect(page.body).toContain('<th scope="col">contribution</th>');
     expect(page.body).toContain('<td class="mono">mock</td>');
     const bad = await app.inject({ url: '/?address=<script>' });
     expect(bad.body).not.toContain('<script>');
@@ -185,5 +185,25 @@ describe('config and sources', () => {
     const r = await svc.scan(T.degraded);
     expect(r.verdict.score).not.toBeNull();
     expect(r.sources.some((s) => !s.complete)).toBe(true);
+  });
+});
+
+describe('page and security headers', () => {
+  it('sends security headers everywhere and a strict CSP on the page', async () => {
+    const { svc } = makeSvc();
+    const app = buildApp(svc);
+    const page = await app.inject({ url: `/?address=${T.rushr}` });
+    expect(page.headers['x-content-type-options']).toBe('nosniff');
+    expect(page.headers['x-frame-options']).toBe('DENY');
+    expect(page.headers['strict-transport-security']).toContain('max-age=');
+    expect(page.headers['content-security-policy']).toContain("default-src 'none'");
+    expect(page.headers['content-security-policy']).not.toContain('script-src');
+    expect(page.body).toContain('<meta name="description"');
+    expect(page.body).toContain('rel="icon"');
+    expect(page.body).toContain('<th scope="col">contribution</th>');
+    expect(page.body).toContain('<caption');
+    const api = await app.inject({ url: '/v1/health' });
+    expect(api.headers['content-security-policy']).toBe("default-src 'none'; frame-ancestors 'none'");
+    expect(api.headers['referrer-policy']).toBe('no-referrer');
   });
 });
