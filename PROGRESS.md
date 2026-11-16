@@ -5,3 +5,7 @@
 | 1 | Fase 1: workspace pnpm (core, mcp-server, sdk), tsconfig strict, `DataSource` + `MockSource`, adapter DexScreener / RPC / BasedBot (env-driven, `complete:false` default), `collectInputs` | fase 2 | typecheck ok |
 | 2 | Fase 2: clamp piecewise, 9 sinyal + bobot, engine (redistribusi bobot, override berurutan, flag, label, confidence), brief generator, 5 fixture golden (`synthetic: true`) | fase 3 | 27/27 hijau, lint ok |
 | 3 | Fase 3: test adapter DexScreener (pilih pair, 429 → snapshot lama degraded), RPC (holder dari Transfer log + balanceOf, approximate), BasedBot (env-driven, parser defensif), collect (adapter mati tetap menghasilkan putusan), registry trust + probe | fase 4 | 42/42 hijau |
+| 4 | Fase 4: HTTP API Fastify (semua route bagian 13 + padanan semua tool), cache scan 45s, rate limit fixed-window per IP + header `X-RateLimit-*`, amplop seragam | fase 5 | hijau |
+| 5 | Fase 5: brief per tool, `nextActions` divalidasi `checkActions`, `verdict_explain_score` dengan titik normalisasi | fase 6 | hijau |
+| 6 | Fase 6: MCP stateless `POST /mcp` + stdio (`bin/verdict-mcp`), 11 tool Zod-validated, deskripsi untuk LLM, scope gating, idempotensi, kuota | fase 7 | 60/60, coverage score 99% / mcp 100% |
+| 7 | Fase 7: worker (60s ± jitter, staggered, idle → 10 menit), 4 aturan alert, dedupe `{addr}:{kind}:{jam}`, webhook | fase 8 | hijau |

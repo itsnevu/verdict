@@ -57,7 +57,7 @@ export const errors = {
   validation: (msg: string) => new VerdictError('INVALID_ARGUMENTS', msg, false, 'perbaiki argumen sesuai inputSchema di tools/list', 400),
   unknownTool: (n: string) => new VerdictError('UNKNOWN_TOOL', `no tool named ${n}`, false, 'panggil tools/list untuk daftar tool yang ada', 404),
   notFoundGeneric: (what: string) => new VerdictError('NOT_FOUND', `${what} not found`, false, 'cek id atau panggil verdict_registry_search', 404),
-  internal: () => new VerdictError('INTERNAL', 'unexpected failure, nothing was written', true, 'ulangi sekali; kalau tetap gagal laporkan dengan _meta.fetchedAt', 500),
+  internal: () => new VerdictError('INTERNAL', 'unexpected failure, nothing was written', true, 'ulangi sekali; kalau tetap gagal laporkan dengan _meta.fetchedAt', 503),
 };
 
 export const ADDR_RE = /^0x[0-9a-f]{40}$/;
